@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="hr">
+  <head>
+    <meta charset="UTF-," />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDV Kalkulator za Fakture</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: 'var(--primary-color, #2563eb)',
+              secondary: 'var(--secondary-color, #4f46e5)',
+              background: 'var(--background-color, #f8fafc)',
+              card: 'var(--card-color, #ffffff)',
+              text: 'var(--text-color, #1e293b)',
+              'text-secondary': 'var(--text-secondary-color, #64748b)',
+              border: 'var(--border-color, #e2e8f0)',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      @media print {
+        body > *:not(.print-container) {
+          display: none !important;
+        }
+        .print-container {
+          display: block !important;
+        }
+        .printable-page {
+          page-break-after: always;
+          box-shadow: none !important;
+          border: none !important;
+        }
+        @page {
+          size: A4;
+          margin: 1.5cm;
+        }
+        /* Print-friendly styles */
+        .printable-page {
+           color: #000;
+        }
+        .printable-page [class*="bg-"] {
+          background-color: white !important;
+        }
+        .printable-page .text-primary, 
+        .printable-page .text-slate-800,
+        .printable-page .text-slate-700,
+        .printable-page .text-slate-600 {
+           color: #000 !important;
+        }
+        .printable-page .text-slate-500,
+        .printable-page .text-slate-400 {
+           color: #444 !important;
+        }
+        .printable-page .border,
+        .printable-page .border-t,
+        .printable-page .border-b,
+        .printable-page [class*="border-"] {
+            border-color: #ddd !important;
+        }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "jspdf": "https://aistudiocdn.com/jspdf@^3.0.3",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1"
+  }
+}
+</script>
+</head>
+  <body class="bg-background text-text">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

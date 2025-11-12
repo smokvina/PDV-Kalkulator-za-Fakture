@@ -25,6 +25,7 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isGeneratingCombinedPdf, setIsGeneratingCombinedPdf] = useState<boolean>(false);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
+  const [fileToPrint, setFileToPrint] = useState<ProcessedFile | null>(null);
 
 
   const handleFileSelection = useCallback((files: File[]) => {
@@ -44,7 +45,7 @@ const App: React.FC = () => {
   
   const parseSingleInvoice = useCallback(async (fileToProcess: ProcessedFile) => {
     if (!process.env.API_KEY) {
-      setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'error', error: "API ključ nije postavljen. Molimo postavite API_KEY u varijablama okruženja." } : f));
+      setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'error', error: "API ključ nije postavljen." } : f));
       return;
     }
 
@@ -75,13 +76,29 @@ const App: React.FC = () => {
           responseSchema: INVOICE_SCHEMA,
         },
       });
+      
+      let parsedJson;
+      try {
+        parsedJson = JSON.parse(response.text);
+      } catch (jsonError) {
+        console.error("JSON parsing error:", jsonError, "Original response:", response.text);
+        throw new Error("AI model nije vratio ispravan JSON format. To se može dogoditi s kompleksnim ili nejasnim dokumentima.");
+      }
 
-      const parsedJson = JSON.parse(response.text);
+
       setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'success', data: parsedJson as InvoiceData } : f));
 
     } catch (e) {
-      console.error(e);
-      setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'error', error: "Došlo je do pogreške prilikom obrade fakture. Provjerite je li datoteka ispravna i pokušajte ponovno. Greška: " + (e as Error).message } : f));
+      console.error("Greška pri parsiranju fakture:", e);
+      let errorMessage = "Došlo je do neočekivane pogreške prilikom obrade.";
+       if (e instanceof Error) {
+           if (e.message.toLowerCase().includes('network') || e.message.toLowerCase().includes('fetch')) {
+               errorMessage = "Problem s mrežnom vezom. Provjerite svoju internet konekciju.";
+           } else {
+               errorMessage = e.message;
+           }
+       }
+      setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'error', error: errorMessage } : f));
     }
   }, []);
 
@@ -98,10 +115,15 @@ const App: React.FC = () => {
   // Effect to handle the printing process reliably
   useEffect(() => {
     if (isPrinting) {
-      // window.print() is a blocking operation.
-      // The code below will execute after the print dialog is closed.
-      window.print();
-      setIsPrinting(false);
+      // Use a short timeout to ensure the printable content has rendered.
+      const timer = setTimeout(() => {
+        window.print();
+        // After the print dialog is closed, reset the printing state.
+        setIsPrinting(false);
+        setFileToPrint(null);
+      }, 100);
+      
+      return () => clearTimeout(timer);
     }
   }, [isPrinting]);
 
@@ -170,22 +192,37 @@ const App: React.FC = () => {
   const handlePrintAll = () => {
     const successfulFiles = processedFiles.filter(f => f.status === 'success' && f.data);
     if (successfulFiles.length === 0) return;
-    
-    // Set isPrinting to true, which will trigger the useEffect hook
+    setFileToPrint(null); // Ensure we're printing all, not a single file
     setIsPrinting(true);
   };
   
+  const handlePrintSingle = (fileId: string) => {
+    const file = processedFiles.find(f => f.id === fileId);
+    if (file && file.status === 'success' && file.data) {
+      setFileToPrint(file);
+      setIsPrinting(true);
+    }
+  };
+
   const successfulFiles = processedFiles.filter(f => f.status === 'success' && f.data);
 
   return (
     <>
       {isPrinting && (
          <div className="print-container">
-            {successfulFiles.map(file => (
-              <div key={file.id} className="printable-page">
-                <ReportContent data={file.data!} originalPdfFile={file.file} />
+            {fileToPrint ? (
+              // Printing a single file
+              <div key={fileToPrint.id} className="printable-page">
+                <ReportContent data={fileToPrint.data!} originalPdfFile={fileToPrint.file} />
               </div>
-            ))}
+            ) : (
+              // Printing all successful files
+              successfulFiles.map(file => (
+                <div key={file.id} className="printable-page">
+                  <ReportContent data={file.data!} originalPdfFile={file.file} />
+                </div>
+              ))
+            )}
         </div>
       )}
       <div className={`min-h-screen bg-slate-50 font-sans ${isPrinting ? 'hidden' : ''}`}>
@@ -249,6 +286,7 @@ const App: React.FC = () => {
                     key={pf.id}
                     processedFile={pf}
                     onDataUpdate={(updatedData) => handleDataUpdate(pf.id, updatedData)}
+                    onPrintSingle={() => handlePrintSingle(pf.id)}
                   />
                 ))}
               </div>
@@ -257,6 +295,16 @@ const App: React.FC = () => {
         </main>
          <footer className="text-center py-6 text-sm text-slate-500">
           <p>&copy; {new Date().getFullYear()} PDV Kalkulator. Pokreće Gemini AI.</p>
+          <p className="mt-2">
+            <a 
+              href="https://wa.me/38598667806" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:underline"
+            >
+              Created by AppsBYSmokvina +38598667806
+            </a>
+          </p>
         </footer>
       </div>
     </>

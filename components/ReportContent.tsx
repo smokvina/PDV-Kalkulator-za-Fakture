@@ -7,9 +7,14 @@ interface ReportContentProps {
 }
 
 export const ReportContent: React.FC<ReportContentProps> = ({ data, originalPdfFile }) => (
-     <div className="p-8 font-sans text-sm text-slate-800 bg-white">
+     <div className="report-content-wrapper p-8 font-sans text-sm text-slate-800 bg-white">
         <h1 className="text-2xl font-bold mb-2 text-primary">Izvještaj o Obradi Fakture</h1>
         <p className="text-slate-500 mb-6">Generirano: {new Date(data.meta.parsed_at).toLocaleString('hr-HR')}</p>
+
+        <div className="my-8 p-6 bg-primary/10 rounded-xl border-2 border-primary/20">
+            <p className="text-base font-semibold text-primary/80 uppercase tracking-widest text-center mb-2">Objekt</p>
+            <h2 className="text-3xl font-bold text-primary text-center tracking-tight">{data.buyer.name}</h2>
+        </div>
 
         <div className="grid grid-cols-2 gap-8 mb-6">
             <div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { InvoiceData } from '../types';
@@ -10,13 +10,65 @@ interface ResultsDisplayProps {
   initialData: InvoiceData;
   onDataUpdate: (updatedData: InvoiceData) => void;
   originalPdfFile: File | null;
+  onPrint: () => void;
 }
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onDataUpdate, originalPdfFile }) => {
+const createSafeFilename = (supplier: string, invoiceNumber: string, invoiceDate: string): string => {
+    const sanitize = (str: string) => str ? String(str).replace(/[\s\\/:"*?<>|]+/g, '_') : '';
+    const parts = [
+        sanitize(supplier),
+        sanitize(invoiceNumber),
+        sanitize(invoiceDate)
+    ].filter(Boolean); // Filtriraj prazne dijelove koji mogu nastati zbog nedostatka podataka
+
+    if (parts.length === 0) {
+        return `izvjestaj_${new Date().toISOString().split('T')[0]}.pdf`;
+    }
+
+    return `${parts.join('_')}.pdf`;
+};
+
+
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onDataUpdate, originalPdfFile, onPrint }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<InvoiceData>(initialData);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const reportContentRef = useRef<HTMLDivElement>(null);
+
+  const calculateVatBase = useMemo(() => {
+    return (items: InvoiceData['line_items']): number => {
+      const reservationItems = items.filter(item => 
+        item.description.toLowerCase().includes('reservations') || 
+        item.description.toLowerCase().includes('rezervacije')
+      );
+      return reservationItems.reduce((sum, item) => sum + item.amount, 0);
+    };
+  }, []);
+
+  // Recalculate when form data changes
+  useEffect(() => {
+    const newVatBase = calculateVatBase(formData.line_items);
+    const vatRate = formData.calculations.vat_rate_percent || 0;
+    const newVatAmount = parseFloat(((newVatBase * vatRate) / 100).toFixed(2));
+    const newTotal = newVatBase + newVatAmount;
+    
+    if (
+      newVatBase !== formData.calculations.commission_base || 
+      newVatAmount !== formData.calculations.vat_amount ||
+      newTotal !== formData.calculations.commission_total_with_vat
+    ) {
+      setFormData(prev => ({
+          ...prev,
+          calculations: {
+              ...prev.calculations,
+              commission_base: newVatBase,
+              vat_amount: newVatAmount,
+              commission_total_with_vat: newTotal,
+          }
+      }));
+    }
+  }, [formData.line_items, formData.calculations.vat_rate_percent, calculateVatBase, formData.calculations.commission_base, formData.calculations.vat_amount, formData.calculations.commission_total_with_vat]);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -24,7 +76,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
     
     setFormData(prevData => {
       const newData = JSON.parse(JSON.stringify(prevData)); // Deep copy
-      let current = newData;
+      let current: any = newData;
       
       for (let i = 0; i < keys.length - 1; i++) {
         current = current[keys[i]];
@@ -40,6 +92,15 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
       
       current[keys[keys.length - 1]] = finalValue;
       return newData;
+    });
+  };
+
+  const handleLineItemChange = (index: number, field: 'description' | 'amount', value: string | number) => {
+    setFormData(prevData => {
+        const newLineItems = [...prevData.line_items];
+        const updatedValue = field === 'amount' && typeof value === 'string' ? (parseFloat(value) || 0) : value;
+        newLineItems[index] = { ...newLineItems[index], [field]: updatedValue };
+        return { ...prevData, line_items: newLineItems };
     });
   };
 
@@ -65,28 +126,19 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-        pdf.save(`izvjestaj-${originalPdfFile?.name.replace('.pdf', '') || 'faktura'}.pdf`);
+        
+        const filename = createSafeFilename(
+            formData.supplier.name,
+            formData.invoice.invoice_number,
+            formData.invoice.invoice_date
+        );
+        pdf.save(filename);
+
     } catch (error) {
         console.error("Greška pri generiranju PDF-a:", error);
         alert("Došlo je do greške pri generiranju PDF-a.");
     } finally {
         setIsGeneratingPdf(false);
-    }
-  };
-
-  const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (printWindow && reportContentRef.current) {
-        printWindow.document.write('<html><head><title>Ispis izvještaja</title>');
-        // Ideally, link to a stylesheet for better print format
-        printWindow.document.write('<style>body { font-family: sans-serif; -webkit-print-color-adjust: exact; } .bg-slate-50 { background-color: #f8fafc; } .bg-blue-50 { background-color: #eff6ff; } </style>');
-        printWindow.document.write('</head><body>');
-        printWindow.document.write(reportContentRef.current.innerHTML);
-        printWindow.document.write('</body></html>');
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-        printWindow.close();
     }
   };
 
@@ -120,13 +172,28 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                     <InputField label="Valuta" name="invoice.currency" value={formData.invoice.currency} onChange={handleInputChange} />
                 </div>
             </CollapsibleSection>
+
+            <CollapsibleSection title="Stavke Računa" defaultOpen>
+                <div className="p-2 space-y-3">
+                    {formData.line_items.map((item, index) => (
+                        <div key={index} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                            <div className="sm:col-span-2">
+                                <InputField label={`Opis ${index + 1}`} name={`line_items.${index}.description`} value={item.description} onChange={(e) => handleLineItemChange(index, 'description', e.target.value)} />
+                            </div>
+                            <div>
+                                <InputField label="Iznos" name={`line_items.${index}.amount`} value={item.amount} onChange={(e) => handleLineItemChange(index, 'amount', e.target.value)} type="number" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </CollapsibleSection>
             
             <CollapsibleSection title="Obračun PDV-a" defaultOpen>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
-                    <InputField label="Osnovica za PDV" name="calculations.commission_base" value={formData.calculations.commission_base} onChange={handleInputChange} type="number" />
+                    <InputField label="Osnovica za PDV (automatski)" name="calculations.commission_base" value={formData.calculations.commission_base} onChange={()=>{}} type="number" readOnly={true} helpText="Osnovica se automatski računa iz stavki koje sadrže 'Rezervacije' ili 'Reservations'." />
                     <InputField label="Stopa PDV-a (%)" name="calculations.vat_rate_percent" value={formData.calculations.vat_rate_percent} onChange={handleInputChange} type="number" />
-                    <InputField label="Iznos PDV-a" name="calculations.vat_amount" value={formData.calculations.vat_amount} onChange={handleInputChange} type="number" />
-                    <InputField label="Ukupno s PDV-om" name="calculations.commission_total_with_vat" value={formData.calculations.commission_total_with_vat} onChange={handleInputChange} type="number" />
+                    <InputField label="Iznos PDV-a (automatski)" name="calculations.vat_amount" value={formData.calculations.vat_amount} onChange={()=>{}} type="number" readOnly={true} />
+                    <InputField label="Ukupno s PDV-om (automatski)" name="calculations.commission_total_with_vat" value={formData.calculations.commission_total_with_vat} onChange={()=>{}} type="number" readOnly={true} />
                  </div>
             </CollapsibleSection>
 
@@ -186,7 +253,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                     <span>{isGeneratingPdf ? 'Generiram...' : 'PDF'}</span>
                 </button>
                  <button 
-                    onClick={handlePrint} 
+                    onClick={onPrint} 
                     className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50"
                     title="Ispiši"
                 >
@@ -209,9 +276,11 @@ interface InputFieldProps {
     value: string | number;
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     type?: string;
+    readOnly?: boolean;
+    helpText?: string;
 }
 
-const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, type = 'text' }) => (
+const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, type = 'text', readOnly = false, helpText }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
         <input
@@ -220,9 +289,11 @@ const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, t
             name={name}
             value={value}
             onChange={onChange}
+            readOnly={readOnly}
             step={type === 'number' ? '0.01' : undefined}
-            className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm"
+            className={`w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm ${readOnly ? 'bg-slate-100 cursor-not-allowed' : ''}`}
         />
+        {helpText && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
     </div>
 );
 

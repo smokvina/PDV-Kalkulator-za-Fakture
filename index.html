@@ -24,44 +24,68 @@
     </script>
     <style>
       @media print {
-        body > *:not(.print-container) {
-          display: none !important;
-        }
+        /* The main app content is hidden using a 'hidden' class from App.tsx */
         .print-container {
           display: block !important;
         }
-        .printable-page {
-          page-break-after: always;
-          box-shadow: none !important;
-          border: none !important;
-        }
+
+        /* PAGE SETUP */
         @page {
           size: A4;
           margin: 1.5cm;
         }
-        /* Print-friendly styles */
+
         .printable-page {
-           color: #000;
+          page-break-after: always;
+          box-shadow: none !important;
+          border: none !important;
+          width: 100%;
+          height: 100%;
+          overflow: hidden; /* Helps prevent content from spilling */
         }
+        .printable-page:last-child {
+          page-break-after: auto;
+        }
+
+        /* PRINT-FRIENDLY THEME */
+        .printable-page { color: #000; }
         .printable-page [class*="bg-"] {
           background-color: white !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
         .printable-page .text-primary, 
         .printable-page .text-slate-800,
         .printable-page .text-slate-700,
-        .printable-page .text-slate-600 {
-           color: #000 !important;
-        }
+        .printable-page .text-slate-600 { color: #000 !important; }
         .printable-page .text-slate-500,
-        .printable-page .text-slate-400 {
-           color: #444 !important;
-        }
+        .printable-page .text-slate-400 { color: #444 !important; }
         .printable-page .border,
-        .printable-page .border-t,
-        .printable-page .border-b,
-        .printable-page [class*="border-"] {
-            border-color: #ddd !important;
+        .printable-page [class*="border-"] { border-color: #ccc !important; }
+
+        /* LAYOUT ADJUSTMENTS FOR A4 FIT */
+        .report-content-wrapper {
+            padding: 0 !important;
+            font-size: 9pt !important;
+            line-height: 1.3 !important;
         }
+        .report-content-wrapper h1 { font-size: 18pt !important; margin-bottom: 0.5rem !important; }
+        .report-content-wrapper h2 { font-size: 16pt !important; }
+        .report-content-wrapper h3 { font-size: 11pt !important; margin-top: 1rem !important; margin-bottom: 0.25rem !important; }
+        
+        /* Reduce spacing */
+        .report-content-wrapper .my-8 { margin-top: 1rem !important; margin-bottom: 1rem !important; }
+        .report-content-wrapper .p-6 { padding: 1rem !important; }
+        .report-content-wrapper .p-4 { padding: 0.75rem !important; }
+        .report-content-wrapper .mb-6 { margin-bottom: 1rem !important; }
+        .report-content-wrapper .mt-6 { margin-top: 1rem !important; }
+        .report-content-wrapper .mt-8 { margin-top: 1.5rem !important; }
+        .report-content-wrapper .gap-8 { gap: 1.5rem !important; }
+
+        /* Table adjustments */
+        .report-content-wrapper table { font-size: 8.5pt !important; }
+        .report-content-wrapper th, .report-content-wrapper td { padding: 5px !important; }
+        .report-content-wrapper .font-mono { font-size: 8pt !important; line-height: 1.4 !important; }
       }
     </style>
   <script type="importmap">

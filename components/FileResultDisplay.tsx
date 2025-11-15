@@ -110,25 +110,25 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden transition-all duration-300">
+    <div className="bg-white dark:bg-card rounded-2xl shadow-lg border border-border overflow-hidden transition-all duration-300">
       <button 
-        className="w-full flex items-center justify-between p-4 bg-slate-50/70 hover:bg-slate-100 focus:outline-none"
+        className="w-full flex items-center justify-between p-4 bg-slate-50/70 dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700/80 focus:outline-none"
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
         aria-controls={`content-${processedFile.id}`}
       >
         <div className="flex items-center space-x-3 min-w-0">
           {getStatusIcon()}
-          <span className="font-medium text-slate-700 truncate" title={processedFile.file.name}>{processedFile.file.name}</span>
+          <span className="font-medium text-text truncate" title={processedFile.file.name}>{processedFile.file.name}</span>
         </div>
         <div className="flex items-center space-x-3 flex-shrink-0">
-          <span className="text-sm font-semibold text-slate-500 hidden sm:block">{getStatusText()}</span>
-          <IconChevronDown className={`w-5 h-5 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+          <span className="text-sm font-semibold text-text-secondary hidden sm:block">{getStatusText()}</span>
+          <IconChevronDown className={`w-5 h-5 text-text-secondary transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
         </div>
       </button>
 
       {isExpanded && (
-        <div id={`content-${processedFile.id}`} className="bg-white">
+        <div id={`content-${processedFile.id}`} className="bg-white dark:bg-card">
           {processedFile.status === 'success' && processedFile.data && (
             <div className="p-4 sm:p-6">
               <ResultsDisplay 
@@ -141,36 +141,36 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
           )}
           {processedFile.status === 'error' && (
             <div className="p-4 sm:p-6">
-              <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+              <div className="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-4 rounded-md" role="alert">
                   <div className="flex items-start">
                       <div className="flex-shrink-0">
                           <IconAlertTriangle className="h-6 w-6 text-red-500" />
                       </div>
                       <div className="ml-3 flex-1">
-                          <h3 className="text-lg font-bold text-red-900">Obrada nije uspjela</h3>
-                          <div className="mt-2 text-sm text-red-800 bg-red-200 p-3 rounded-md">
+                          <h3 className="text-lg font-bold text-red-900 dark:text-red-200">Obrada nije uspjela</h3>
+                          <div className="mt-2 text-sm text-red-800 dark:text-red-200 bg-red-200 dark:bg-red-500/20 p-3 rounded-md">
                               <p className="font-semibold">Detalji greške:</p>
                               <p className="font-mono break-words">{processedFile.error}</p>
                           </div>
                           <div className="mt-4">
-                              <p className="font-bold text-red-900">Što možete pokušati?</p>
-                              <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-red-800">
+                              <p className="font-bold text-red-900 dark:text-red-200">Što možete pokušati?</p>
+                              <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-red-800 dark:text-red-300">
                                   {getErrorSuggestions(processedFile.error).map((suggestion, index) => (
                                       <li key={index}>{suggestion}</li>
                                   ))}
                               </ul>
                           </div>
                           {processedFile.debugInfo && (
-                            <div className="mt-4 pt-4 border-t border-red-300">
+                            <div className="mt-4 pt-4 border-t border-red-300 dark:border-red-400/50">
                               <button
                                 onClick={() => setShowDebugInfo(!showDebugInfo)}
-                                className="flex items-center text-sm font-semibold text-red-800 hover:text-red-900 focus:outline-none"
+                                className="flex items-center text-sm font-semibold text-red-800 dark:text-red-300 hover:text-red-900 dark:hover:text-red-200 focus:outline-none"
                               >
                                 <IconCode className="w-4 h-4 mr-1.5" />
                                 <span>{showDebugInfo ? 'Sakrij tehničke detalje' : 'Prikaži tehničke detalje'}</span>
                               </button>
                               {showDebugInfo && (
-                                <div className="mt-2 text-xs text-red-900 bg-red-200 p-3 rounded-md font-mono">
+                                <div className="mt-2 text-xs text-red-900 dark:text-red-200 bg-red-200 dark:bg-red-500/20 p-3 rounded-md font-mono">
                                   <p><strong>Vrijeme obrade:</strong> {processedFile.debugInfo.processingTimeMs} ms</p>
                                   <p><strong>Korišteni model:</strong> {processedFile.debugInfo.modelUsed}</p>
                                   <p className="mt-2"><strong>Sirova greška:</strong></p>
@@ -187,7 +187,7 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
           {(processedFile.status === 'loading' || processedFile.status === 'queue') && (
              <div className="text-center p-8 flex flex-col items-center justify-center">
                 <IconLoader className="h-8 w-8 text-primary animate-spin mb-3" />
-                <p className="text-md font-semibold text-slate-600">{getStatusText()}</p>
+                <p className="text-md font-semibold text-text-secondary">{getStatusText()}</p>
              </div>
           )}
         </div>

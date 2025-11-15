@@ -522,24 +522,24 @@ const App: React.FC = () => {
             )}
         </div>
       )}
-      <div className={`min-h-screen bg-slate-50 font-sans ${isPrinting ? 'hidden' : ''}`}>
+      <div className={`min-h-screen bg-background font-sans ${isPrinting ? 'hidden' : ''}`}>
         <EmailModal
             isOpen={isEmailModalOpen}
             onClose={handleCloseEmailModal}
             onSend={handleEmailSend}
             isSending={isSendingEmail}
         />
-        <header className="bg-white shadow-sm dark:bg-slate-800 dark:border-b dark:border-slate-700">
+        <header className="bg-white shadow-sm dark:bg-slate-800 dark:border-b dark:border-border">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="bg-primary text-white p-2 rounded-lg">
                 <IconBook className="h-6 w-6" />
               </div>
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">PDV Kalkulator za Fakture</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-text">PDV Kalkulator za Fakture</h1>
             </div>
              <button
                 onClick={handleThemeToggle}
-                className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                className="p-2 rounded-full text-text-secondary hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 aria-label="Toggle theme"
             >
                 {theme === 'light' ? (
@@ -553,20 +553,20 @@ const App: React.FC = () => {
         
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-4xl mx-auto">
-            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200 dark:bg-card dark:border-border">
-              <h2 className="text-xl font-semibold text-slate-700 dark:text-text mb-1">Učitajte Fakture</h2>
-              <p className="text-slate-500 dark:text-text-secondary mb-6">Sustav će automatski izvući podatke za svaku datoteku (PDF, JPG, PNG, HEIC) koristeći Gemini AI.</p>
+            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-border dark:bg-card">
+              <h2 className="text-xl font-semibold text-text mb-1">Učitajte Fakture za Provizije Booking.com</h2>
+              <p className="text-text-secondary mb-6">Sustav će automatski izvući podatke za svaku datoteku (PDF, JPG, PNG, HEIC) i proizvesti točne PDV obračune i Uplatnice. Preporučamo opciju Kombiniraj sve…</p>
               <FileUpload onFileSelect={handleFileSelection} disabled={anyProcessRunning} />
             </div>
 
             {processedFiles.length > 0 && (
               <div className="mt-8 space-y-4">
                  <div className="flex justify-between items-center px-2">
-                  <h3 className="text-xl font-semibold text-slate-700 dark:text-text">Rezultati obrade</h3>
+                  <h3 className="text-xl font-semibold text-text">Rezultati obrade</h3>
                    <div className="flex items-center space-x-2">
                     <button
                       onClick={handleClearAll}
-                      className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                      className="text-sm font-medium text-red-600 hover:text-red-700 dark:hover:text-red-500 disabled:opacity-50"
                       disabled={anyProcessRunning}
                     >
                       Očisti sve
@@ -589,7 +589,7 @@ const App: React.FC = () => {
             )}
           </div>
         </main>
-         <footer className="text-center py-6 text-sm text-slate-500 dark:text-text-secondary">
+         <footer className="text-center py-6 text-sm text-text-secondary">
           <p>&copy; {new Date().getFullYear()} PDV Kalkulator. Pokreće Gemini AI.</p>
           <p className="mt-2">
             <a 

@@ -108,10 +108,10 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
     return (
         <div className="mt-6">
             {/* Global Actions */}
-            <div className="flex justify-end items-center flex-wrap gap-2 p-4 bg-slate-50 rounded-xl border border-slate-200 mb-6">
+            <div className="flex justify-end items-center flex-wrap gap-2 p-4 bg-slate-50 dark:bg-card dark:border-border rounded-xl border border-border mb-6">
                  <button
                     onClick={handleGenerateSummaryPaymentPdf}
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={disabledForSuccessful || isGeneratingSummaryPaymentPdf}
                     title="Generiraj zbirnu uplatnicu za PDV"
                 >
@@ -120,7 +120,7 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                 </button>
                  <button
                     onClick={onDownloadSummary}
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={disabledForSuccessful}
                     title="Preuzmi zbirni izvještaj kao PDF"
                 >
@@ -129,7 +129,7 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                 </button>
                 <button
                     onClick={onMergePdfs}
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={disabledForAny}
                     title="Spoji sve učitane originalne PDF-ove u jedan dokument"
                 >
@@ -138,7 +138,7 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                 </button>
                  <button
                     onClick={onOpenEmailModal}
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={disabledForSuccessful}
                     title="Pošalji izvještaje emailom"
                 >
@@ -147,7 +147,7 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                 </button>
                 <button
                     onClick={onPrintAll}
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={disabledForSuccessful}
                     title="Ispiši sve uspješno obrađene fakture"
                 >
@@ -156,7 +156,7 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                 </button>
                 <button
                     onClick={onDownloadAll}
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={disabledForSuccessful}
                     title="Spoji sve uspješno obrađene izvještaje u jedan PDF"
                 >
@@ -186,7 +186,7 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                         />
                     ))
                 ) : (
-                    <div className="p-6 text-center text-slate-500 bg-white rounded-2xl shadow-lg border border-slate-200">
+                    <div className="p-6 text-center text-text-secondary bg-white dark:bg-card rounded-2xl shadow-lg border border-border">
                         <p className="font-semibold">Nema datoteka za prikaz.</p>
                         <p className="text-sm mt-1">Učitajte PDF fakture kako biste započeli s obradom.</p>
                     </div>

@@ -23,9 +23,9 @@ export const SummaryReport: React.FC<SummaryReportProps> = ({ files }) => {
   const currency = successfulFiles[0].data?.invoice.currency || 'EUR';
 
   return (
-    <div className="report-content-wrapper p-8 font-sans text-sm text-slate-800 bg-white">
+    <div className="report-content-wrapper p-8 font-sans text-sm text-text bg-white dark:bg-card">
       <h1 className="text-2xl font-bold mb-2 text-primary">Zbirni Izvještaj o Obradi Faktura</h1>
-      <p className="text-slate-500 mb-6">Generirano: {new Date().toLocaleString('hr-HR')}</p>
+      <p className="text-text-secondary mb-6">Generirano: {new Date().toLocaleString('hr-HR')}</p>
 
       <div className="my-8 p-6 bg-primary/10 rounded-xl border-2 border-primary/20">
         <h2 className="text-xl font-bold text-primary text-center tracking-tight mb-4">Ukupni Sažetak</h2>
@@ -45,10 +45,10 @@ export const SummaryReport: React.FC<SummaryReportProps> = ({ files }) => {
         </div>
       </div>
       
-      <h3 className="font-bold text-slate-600 border-b pb-1 mb-2 mt-8">Pojedinačne Stavke</h3>
+      <h3 className="font-bold text-slate-600 dark:text-slate-300 border-b pb-1 mb-2 mt-8">Pojedinačne Stavke</h3>
       <table className="w-full text-left mb-6">
         <thead>
-          <tr className="bg-slate-100">
+          <tr className="bg-slate-100 dark:bg-slate-700/50">
             <th className="p-2 font-semibold">Dobavljač</th>
             <th className="p-2 font-semibold">Broj fakture</th>
             <th className="p-2 font-semibold">Datum</th>
@@ -59,7 +59,7 @@ export const SummaryReport: React.FC<SummaryReportProps> = ({ files }) => {
         </thead>
         <tbody>
           {successfulFiles.map(file => file.data && (
-            <tr key={file.id} className="border-b border-slate-200">
+            <tr key={file.id} className="border-b border-border">
               <td className="p-2">{file.data.supplier.name}</td>
               <td className="p-2">{file.data.invoice.invoice_number}</td>
               <td className="p-2">{file.data.invoice.invoice_date}</td>
@@ -68,7 +68,7 @@ export const SummaryReport: React.FC<SummaryReportProps> = ({ files }) => {
               <td className="p-2 text-right">{file.data.calculations.commission_total_with_vat.toFixed(2)}</td>
             </tr>
           ))}
-          <tr className="bg-slate-200 font-bold">
+          <tr className="bg-slate-200 dark:bg-slate-700 font-bold">
             <td className="p-2" colSpan={3}>UKUPNO</td>
             <td className="p-2 text-right">{totals.base.toFixed(2)}</td>
             <td className="p-2 text-right">{totals.vat.toFixed(2)}</td>
@@ -77,7 +77,7 @@ export const SummaryReport: React.FC<SummaryReportProps> = ({ files }) => {
         </tbody>
       </table>
 
-      <div className="mt-8 text-xs text-slate-400 text-center border-t pt-4">
+      <div className="mt-8 text-xs text-text-secondary text-center border-t pt-4">
         <p>Ovo je informativni izračun generiran pomoću AI. Za konačni porezni savjet, molimo konzultirajte svog računovođu.</p>
       </div>
     </div>

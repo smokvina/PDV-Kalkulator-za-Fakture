@@ -331,21 +331,21 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                     <CheckboxField label="Primjenjuje se prijenos porezne obveze (Reverse Charge)" name="actions.reverse_charge_applies" checked={formData.actions.reverse_charge_applies} onChange={handleInputChange} />
                     <CheckboxField label="Potreban ručni pregled" name="actions.manual_review_required" checked={formData.actions.manual_review_required} onChange={handleInputChange} />
                     <div>
-                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Upute za PDV Prijavu</label>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-text-secondary mb-1">Upute za PDV Prijavu</label>
                          <textarea 
                             name="actions.instructions_for_pdv_form"
                             value={formData.actions.instructions_for_pdv_form}
                             onChange={handleInputChange}
                             rows={5}
-                            className="w-full mt-1 p-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm font-mono dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200"
+                            className="w-full mt-1 p-2 border border-border rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm font-mono dark:bg-slate-700 dark:text-text"
                         />
                     </div>
                 </div>
             </CollapsibleSection>
         </div>
 
-        <div className="flex justify-end items-center space-x-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-            <button onClick={handleCancel} className="text-sm font-semibold text-slate-600 dark:text-slate-300 px-4 py-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600">
+        <div className="flex justify-end items-center space-x-3 mt-6 pt-4 border-t border-border">
+            <button onClick={handleCancel} className="text-sm font-semibold text-text px-4 py-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600">
                 Odustani
             </button>
             <button onClick={handleSave} className="text-sm font-semibold text-white bg-primary px-4 py-2 rounded-lg hover:bg-primary/90 shadow-sm">
@@ -358,15 +358,15 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
 
   return (
     <div>
-        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-border">
-            <div className="flex items-center text-sm text-slate-500 dark:text-text-secondary">
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-border">
+            <div className="flex items-center text-sm text-text-secondary">
                 <IconInfo className="w-4 h-4 mr-2"/>
                 <span>Ovo je AI-generirani sažetak. Podatke možete urediti po potrebi.</span>
             </div>
             <div className="flex items-center space-x-2">
                 <button 
                     onClick={handleStartEditing} 
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 dark:bg-slate-700 dark:text-slate-200 dark:border-border dark:hover:bg-slate-600"
                     title="Uredi podatke"
                 >
                     <IconPencil className="w-4 h-4 mr-1.5" />
@@ -374,7 +374,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                 </button>
                 <button 
                     onClick={handleGeneratePaymentPdf} 
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:border-border dark:hover:bg-slate-600"
                     title="Generiraj uplatnicu"
                     disabled={isGeneratingPaymentPdf}
                 >
@@ -383,7 +383,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                 </button>
                  <button 
                     onClick={handleGeneratePdf} 
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:border-border dark:hover:bg-slate-600"
                     title="Preuzmi kao PDF"
                     disabled={isGeneratingPdf}
                 >
@@ -392,7 +392,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                 </button>
                  <button 
                     onClick={onPrint} 
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 dark:bg-slate-700 dark:text-slate-200 dark:border-border dark:hover:bg-slate-600"
                     title="Ispiši"
                 >
                     <IconPrinter className="w-4 h-4 mr-1.5" />
@@ -421,7 +421,7 @@ interface InputFieldProps {
 
 const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, type = 'text', readOnly = false, helpText, error = false }) => (
     <div>
-        <label htmlFor={name} className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">{label}</label>
+        <label htmlFor={name} className="block text-sm font-medium text-text-secondary mb-1">{label}</label>
         <div className="relative">
             <input
                 type={type}
@@ -432,7 +432,7 @@ const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, t
                 readOnly={readOnly}
                 step={type === 'number' ? '0.01' : undefined}
                 inputMode={type === 'text' ? 'decimal' : undefined}
-                className={`w-full p-2 border rounded-md shadow-sm text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 ${readOnly ? 'bg-slate-100 dark:bg-slate-600 cursor-not-allowed' : ''} ${error ? 'border-red-500 pr-10 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-primary focus:border-primary'}`}
+                className={`w-full p-2 border rounded-md shadow-sm text-sm dark:bg-slate-700 dark:text-text ${readOnly ? 'bg-slate-100 dark:bg-slate-600 cursor-not-allowed' : ''} ${error ? 'border-red-500 pr-10 focus:border-red-500 focus:ring-red-500' : 'border-border focus:ring-primary focus:border-primary'}`}
                 aria-invalid={error}
             />
             {error && (
@@ -441,7 +441,7 @@ const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, t
                 </div>
             )}
         </div>
-        {helpText && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{helpText}</p>}
+        {helpText && <p className="mt-1 text-xs text-text-secondary">{helpText}</p>}
     </div>
 );
 
@@ -461,8 +461,8 @@ const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onC
             name={name}
             checked={checked}
             onChange={onChange}
-            className="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded dark:bg-slate-600 dark:border-slate-500"
+            className="h-4 w-4 text-primary focus:ring-primary border-border rounded dark:bg-slate-600"
         />
-        <label htmlFor={name} className="ml-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
+        <label htmlFor={name} className="ml-2 block text-sm font-medium text-text">{label}</label>
     </div>
 );

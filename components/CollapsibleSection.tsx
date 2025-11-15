@@ -11,14 +11,14 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, c
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
-    <div className="border-t border-slate-200">
+    <div className="border-t border-border">
       <button
-        className="w-full flex justify-between items-center py-3 text-left font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none"
+        className="w-full flex justify-between items-center py-3 text-left font-semibold text-text hover:bg-slate-50 dark:hover:bg-slate-700/50 focus:outline-none"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
       >
         <span>{title}</span>
-        <IconChevronDown className={`w-5 h-5 text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <IconChevronDown className={`w-5 h-5 text-text-secondary transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       {isOpen && (
         <div className="pb-4">

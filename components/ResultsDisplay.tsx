@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom/client';
 import type { InvoiceData } from '../types';
 import { ReportContent } from './ReportContent';
 import { CollapsibleSection } from './CollapsibleSection';
-import { IconPencil, IconDownload, IconPrinter, IconInfo, IconBarcode, PaymentSlip } from './Icons';
+import { IconPencil, IconDownload, IconPrinter, IconInfo, IconBarcode, PaymentSlip, IconAlertTriangle } from './Icons';
 
 interface ResultsDisplayProps {
   initialData: InvoiceData;
@@ -13,6 +13,17 @@ interface ResultsDisplayProps {
   originalPdfFile: File | null;
   onPrint: () => void;
 }
+
+// Define a version of InvoiceData where line item amounts can be strings for editing
+type FormLineItem = {
+  description: string;
+  amount: string | number;
+};
+
+type FormInvoiceData = Omit<InvoiceData, 'line_items'> & {
+  line_items: FormLineItem[];
+};
+
 
 const createSafeFilename = (prefix: string, supplier: string, invoiceNumber: string): string => {
     const sanitize = (str: string) => str ? String(str).replace(/[\s\\/:"*?<>|]+/g, '_') : '';
@@ -32,13 +43,13 @@ const createSafeFilename = (prefix: string, supplier: string, invoiceNumber: str
 
 export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onDataUpdate, originalPdfFile, onPrint }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<InvoiceData>(initialData);
+  const [formData, setFormData] = useState<FormInvoiceData>(initialData);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isGeneratingPaymentPdf, setIsGeneratingPaymentPdf] = useState(false);
   const reportContentRef = useRef<HTMLDivElement>(null);
 
   const calculateVatBase = useMemo(() => {
-    return (items: InvoiceData['line_items']): number => {
+    return (items: Array<{ description: string; amount: number; }>): number => {
       const reservationItems = items.filter(item => 
         item.description.toLowerCase().includes('reservations') || 
         item.description.toLowerCase().includes('rezervacije')
@@ -47,9 +58,17 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
     };
   }, []);
 
-  // Recalculate when form data changes
+  // Recalculate when form data changes, only in edit mode
   useEffect(() => {
-    const newVatBase = calculateVatBase(formData.line_items);
+    if (!isEditing) return;
+
+    const newVatBase = calculateVatBase(
+      // Temporarily convert string amounts to numbers for calculation
+      formData.line_items.map(item => ({
+          ...item,
+          amount: parseFloat(String(item.amount)) || 0
+      }))
+    );
     const vatRate = formData.calculations.vat_rate_percent || 0;
     const newVatAmount = parseFloat(((newVatBase * vatRate) / 100).toFixed(2));
     const newTotal = newVatBase + newVatAmount;
@@ -69,7 +88,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
           }
       }));
     }
-  }, [formData.line_items, formData.calculations.vat_rate_percent, calculateVatBase, formData.calculations.commission_base, formData.calculations.vat_amount, formData.calculations.commission_total_with_vat]);
+  }, [isEditing, formData.line_items, formData.calculations.vat_rate_percent, calculateVatBase, formData.calculations.commission_base, formData.calculations.vat_amount, formData.calculations.commission_total_with_vat]);
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -97,17 +116,43 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
     });
   };
 
-  const handleLineItemChange = (index: number, field: 'description' | 'amount', value: string | number) => {
+  const handleLineItemChange = (index: number, field: 'description' | 'amount', value: string) => {
     setFormData(prevData => {
         const newLineItems = [...prevData.line_items];
-        const updatedValue = field === 'amount' && typeof value === 'string' ? (parseFloat(value) || 0) : value;
-        newLineItems[index] = { ...newLineItems[index], [field]: updatedValue };
+        newLineItems[index] = { ...newLineItems[index], [field]: value };
         return { ...prevData, line_items: newLineItems };
     });
   };
 
+  const handleStartEditing = () => {
+      setFormData(prev => ({
+          ...prev,
+          line_items: prev.line_items.map(item => ({...item, amount: String(item.amount)}))
+      }));
+      setIsEditing(true);
+  };
+
   const handleSave = () => {
-    onDataUpdate(formData);
+    const hasErrors = formData.line_items.some(item => {
+        const amountNum = parseFloat(String(item.amount));
+        return isNaN(amountNum) || amountNum < 0;
+    });
+
+    if (hasErrors) {
+        alert("Molimo ispravite iznose. Iznosi moraju biti važeći pozitivni brojevi.");
+        return;
+    }
+    
+    const dataToSave: InvoiceData = {
+        ...formData,
+        line_items: formData.line_items.map(item => ({
+            ...item,
+            amount: parseFloat(String(item.amount)) || 0
+        }))
+    };
+
+    onDataUpdate(dataToSave);
+    setFormData(dataToSave);
     setIsEditing(false);
   };
 
@@ -246,16 +291,29 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
 
             <CollapsibleSection title="Stavke Računa" defaultOpen>
                 <div className="p-2 space-y-3">
-                    {formData.line_items.map((item, index) => (
-                        <div key={index} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
-                            <div className="sm:col-span-2">
-                                <InputField label={`Opis ${index + 1}`} name={`line_items.${index}.description`} value={item.description} onChange={(e) => handleLineItemChange(index, 'description', e.target.value)} />
+                    {formData.line_items.map((item, index) => {
+                        const amountStr = String(item.amount).trim();
+                        const amountNum = parseFloat(amountStr);
+                        const isInvalid = amountStr !== '' && (isNaN(amountNum) || amountNum < 0);
+
+                        return (
+                            <div key={index} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                                <div className="sm:col-span-2">
+                                    <InputField label={`Opis ${index + 1}`} name={`line_items.${index}.description`} value={item.description} onChange={(e) => handleLineItemChange(index, 'description', e.target.value)} />
+                                </div>
+                                <div>
+                                    <InputField 
+                                        label="Iznos" 
+                                        name={`line_items.${index}.amount`} 
+                                        value={item.amount as string} 
+                                        onChange={(e) => handleLineItemChange(index, 'amount', e.target.value)} 
+                                        type="text" 
+                                        error={isInvalid} 
+                                    />
+                                </div>
                             </div>
-                            <div>
-                                <InputField label="Iznos" name={`line_items.${index}.amount`} value={item.amount} onChange={(e) => handleLineItemChange(index, 'amount', e.target.value)} type="number" />
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </CollapsibleSection>
             
@@ -307,7 +365,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
             </div>
             <div className="flex items-center space-x-2">
                 <button 
-                    onClick={() => setIsEditing(true)} 
+                    onClick={handleStartEditing} 
                     className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
                     title="Uredi podatke"
                 >
@@ -343,7 +401,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
             </div>
         </div>
         <div ref={reportContentRef}>
-            <ReportContent data={formData} originalPdfFile={originalPdfFile} />
+            <ReportContent data={formData as InvoiceData} originalPdfFile={originalPdfFile} />
         </div>
     </div>
   );
@@ -358,24 +416,35 @@ interface InputFieldProps {
     type?: string;
     readOnly?: boolean;
     helpText?: string;
+    error?: boolean;
 }
 
-const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, type = 'text', readOnly = false, helpText }) => (
+const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, type = 'text', readOnly = false, helpText, error = false }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">{label}</label>
-        <input
-            type={type}
-            id={name}
-            name={name}
-            value={value}
-            onChange={onChange}
-            readOnly={readOnly}
-            step={type === 'number' ? '0.01' : undefined}
-            className={`w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 ${readOnly ? 'bg-slate-100 dark:bg-slate-600 cursor-not-allowed' : ''}`}
-        />
+        <div className="relative">
+            <input
+                type={type}
+                id={name}
+                name={name}
+                value={value}
+                onChange={onChange}
+                readOnly={readOnly}
+                step={type === 'number' ? '0.01' : undefined}
+                inputMode={type === 'text' ? 'decimal' : undefined}
+                className={`w-full p-2 border rounded-md shadow-sm text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 ${readOnly ? 'bg-slate-100 dark:bg-slate-600 cursor-not-allowed' : ''} ${error ? 'border-red-500 pr-10 focus:border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-primary focus:border-primary'}`}
+                aria-invalid={error}
+            />
+            {error && (
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <IconAlertTriangle className="h-5 w-5 text-red-500" aria-hidden="true" />
+                </div>
+            )}
+        </div>
         {helpText && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{helpText}</p>}
     </div>
 );
+
 
 interface CheckboxFieldProps {
     label: string;

@@ -1,5 +1,4 @@
 import React from 'react';
-import QRCode from 'react-qr-code';
 
 export const IconBook: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -158,134 +157,77 @@ interface PaymentSlipProps {
   opisPlacanja: string;
 }
 
-const formatAmountForHub = (amount: number): string => {
-  return amount.toFixed(2).replace('.', ',');
-};
-
-const cleanStringForHub = (str: string, maxLength: number): string => {
-    if (!str) return '';
-    const replacements: { [key: string]: string } = {
-        'Č': 'C', 'č': 'c', 'Ć': 'C', 'ć': 'c',
-        'Đ': 'D', 'đ': 'd', 'Š': 'S', 'š': 's',
-        'Ž': 'Z', 'ž': 'z'
-    };
-    let cleaned = str.replace(/[ČčĆćĐđŠšŽž]/g, c => replacements[c] || c);
-    cleaned = cleaned.replace(/[^a-zA-Z0-9\s.,-]/g, '');
-    return cleaned.substring(0, maxLength);
-};
-
 export const PaymentSlip: React.FC<PaymentSlipProps> = (props) => {
     const {
         payerName, payerAddress, recipientName, recipientAddress, recipientIban,
         amount, currency, model, pozivNaBroj, sifraNamjene, opisPlacanja
     } = props;
 
-    // Split address into street and city for HUB3A standard which has separate fields
-    const [payerStreet = '', ...payerCityParts] = (payerAddress || '').split(',');
-    const payerCity = payerCityParts.join(',').trim();
-
-    const [recipientStreet = '', ...recipientCityParts] = (recipientAddress || '').split(',');
-    const recipientCity = recipientCityParts.join(',').trim();
-
-    const hub3aData = [
-        'HRK',
-        'HUB3A',
-        'UTF-8',
-        'EUR',
-        formatAmountForHub(amount),
-        cleanStringForHub(payerName, 25),
-        cleanStringForHub(payerStreet, 25),
-        cleanStringForHub(payerCity, 27),
-        cleanStringForHub(recipientName, 25),
-        cleanStringForHub(recipientStreet, 25),
-        cleanStringForHub(recipientCity, 27),
-        recipientIban,
-        model,
-        pozivNaBroj,
-        sifraNamjene,
-        cleanStringForHub(opisPlacanja, 35),
-        ''
-    ].join('\n');
-
-    const formattedAmount = new Intl.NumberFormat('hr-HR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+    // Helper for bordered fields
+    const BorderedField = ({ label, value, className = '', labelClassName = '', valueClassName = '' }: { label: string; value: React.ReactNode; className?: string, labelClassName?: string, valueClassName?: string }) => (
+        <div className={`border border-slate-300 p-1.5 rounded-md ${className}`}>
+            <p className={`text-[6pt] font-semibold text-slate-500 uppercase tracking-wider mb-0.5 ${labelClassName}`}>{label}</p>
+            <div className={`text-[8.5pt] font-mono text-slate-800 break-words leading-tight ${valueClassName}`}>{value}</div>
+        </div>
+    );
+    
+    const formattedAmount = `=${new Intl.NumberFormat('hr-HR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)}=`;
 
     return (
-      <div className="bg-white p-4 font-mono text-[9pt] border border-black" style={{ width: '180mm', height: '80mm' }}>
-        <h2 className="text-center font-bold text-[11pt] mb-2">NALOG ZA NACIONALNA PLAĆANJA</h2>
-        <div className="grid grid-cols-[1fr_1fr] gap-x-4">
-          <div>
-            <div className="flex">
-              <div className="w-[120px] h-[120px] flex flex-col items-center justify-center">
-                <div style={{ background: 'white', padding: '4px' }}>
-                    <QRCode
-                        value={hub3aData}
-                        size={112}
-                        level="M"
-                        viewBox={`0 0 112 112`}
+      <div className="bg-white p-2 font-sans text-slate-800 border-2 border-slate-400" style={{ width: '180mm', height: '84mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+        
+        <div className="flex justify-between items-center pb-1.5 border-b-2 border-slate-400">
+            <h2 className="text-[9pt] font-bold">NALOG ZA NACIONALNA PLAĆANJA</h2>
+            <div className="flex items-center space-x-1.5">
+                <div className="border border-slate-400 px-1.5 py-0.5 text-center">
+                    <p className="text-[5.5pt] font-semibold text-slate-500 uppercase">Šifra namjene</p>
+                    <p className="text-[8.5pt] font-mono font-bold">{sifraNamjene}</p>
+                </div>
+                <div className="border border-slate-400 px-1.5 py-0.5 text-center">
+                    <p className="text-[5.5pt] font-semibold text-slate-500 uppercase">Valuta plaćanja</p>
+                    <p className="text-[8.5pt] font-mono font-bold">{currency}</p>
+                </div>
+            </div>
+        </div>
+
+        <div className="flex-grow grid grid-cols-2 gap-x-2 mt-1.5">
+            {/* LEFT SIDE */}
+            <div className="space-y-1.5 flex flex-col">
+                <BorderedField label="Platitelj (naziv/ime i adresa)" value={<div className="font-sans text-[8pt]">{payerName}<br/>{payerAddress}</div>} className="flex-grow" />
+                <BorderedField label="Primatelj (naziv/ime i adresa)" value={<div className="font-sans text-[8pt]">{recipientName}<br/>{recipientAddress}</div>} className="flex-grow" />
+            </div>
+
+            {/* RIGHT SIDE */}
+            <div className="space-y-1.5 flex flex-col">
+                <div className="grid grid-cols-3 gap-x-1.5">
+                     <BorderedField 
+                        label="Iznos" 
+                        value={formattedAmount} 
+                        className="col-span-3 text-center bg-slate-50"
+                        labelClassName="text-center"
+                        valueClassName="text-[12pt] font-bold tracking-wider"
                     />
                 </div>
-                <p className="text-[7pt] text-center">BKOD</p>
-              </div>
-              <div className="flex-1 pl-2">
-                <div className="border-b border-black pb-1 mb-1 h-[3em]">
-                  <label className="block text-[7pt]">IBAN platitelja</label>
-                  <span>&nbsp;</span>
+                <BorderedField label="IBAN primatelja" value={recipientIban} valueClassName="tracking-wide text-[8.5pt]" />
+                <div className="grid grid-cols-[1fr,2.5fr] gap-x-1.5">
+                    <BorderedField label="Model" value={model} />
+                    <BorderedField label="Poziv na broj primatelja" value={pozivNaBroj} />
                 </div>
-                <div className="border-b border-black pb-1 h-[3em]">
-                  <label className="block text-[7pt]">Model i poziv na broj platitelja</label>
-                   <span>&nbsp;</span>
-                </div>
-              </div>
+                <BorderedField label="Opis plaćanja" value={<div className="font-sans text-[8pt]">{opisPlacanja}</div>} className="flex-grow" />
             </div>
-            <div className="border-b border-black pb-1 mt-1 h-[3.5em]">
-              <label className="block text-[7pt]">Platitelj</label>
-              <p className="text-[8pt]">{payerName}</p>
-              <p className="text-[8pt]">{payerAddress}</p>
-            </div>
-             <div className="border-b border-black pb-1 mt-1 h-[3.5em]">
-              <label className="block text-[7pt]">Primatelj</label>
-              <p className="text-[8pt]">{recipientName}</p>
-              <p className="text-[8pt]">{recipientAddress}</p>
-            </div>
-          </div>
-          <div>
-             <div className="flex">
-                <div className="border-b border-black pb-1 w-[40mm]">
-                    <label className="block text-[7pt]">Valuta plaćanja</label>
-                    <p className="font-bold">{currency}</p>
-                </div>
-                <div className="border-b border-black pb-1 flex-1">
-                    <label className="block text-[7pt]">Iznos</label>
-                    <p className="font-bold text-right">{formattedAmount}</p>
-                </div>
-             </div>
-             <div className="border-b border-black pb-1 mt-1 h-[3em]">
-                <label className="block text-[7pt]">IBAN primatelja</label>
-                <p>{recipientIban}</p>
-             </div>
-             <div className="flex">
-                <div className="border-b border-black pb-1 mt-1 w-[40mm]">
-                    <label className="block text-[7pt]">Model</label>
-                    <p>{model}</p>
-                </div>
-                <div className="border-b border-black pb-1 mt-1 flex-1">
-                    <label className="block text-[7pt]">Poziv na broj primatelja</label>
-                    <p>{pozivNaBroj}</p>
-                </div>
-             </div>
-             <div className="border-b border-black pb-1 mt-1 h-[2em]">
-                <label className="block text-[7pt]">Šifra namjene</label>
-                <p>{sifraNamjene}</p>
-             </div>
-             <div className="border-b border-black pb-1 mt-1 h-[4.5em] overflow-hidden">
-                <label className="block text-[7pt]">Opis plaćanja</label>
-                <p className="text-[8pt]">{opisPlacanja}</p>
-             </div>
-              <div className="text-right mt-2">
-                <p className="text-[7pt]">Datum izvršenja</p>
-              </div>
-          </div>
         </div>
+        
+        <div className="grid grid-cols-2 gap-x-2 mt-1.5 pt-1.5 border-t-2 border-slate-400 text-[8pt]">
+            <BorderedField label="IBAN platitelja" value={<div className="h-4" />} />
+            <div className="grid grid-cols-2 gap-x-1.5">
+                <BorderedField label="Datum izvršenja" value={<div className="h-4" />} />
+                <div className="text-center pt-1">
+                    <div className="h-5 border-b border-slate-400 w-full" />
+                    <p className="text-[6pt] text-slate-500 mt-0.5">Potpis platitelja</p>
+                </div>
+            </div>
+        </div>
+
       </div>
     );
 };

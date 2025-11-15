@@ -1,4 +1,5 @@
 import React from 'react';
+import QRCode from 'react-qr-code';
 
 export const IconBook: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -100,3 +101,191 @@ export const IconLayers: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <polyline points="2 12 12 17 22 12"></polyline>
   </svg>
 );
+
+export const IconBarcode: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M3 5v14"/>
+        <path d="M8 5v14"/>
+        <path d="M12 5v14"/>
+        <path d="M17 5v14"/>
+        <path d="M21 5v14"/>
+    </svg>
+);
+
+export const IconCode: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <polyline points="16 18 22 12 16 6"/>
+    <polyline points="8 6 2 12 8 18"/>
+  </svg>
+);
+
+export const IconSun: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+);
+
+export const IconMoon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+    </svg>
+);
+
+
+// --- Payment Slip Component ---
+// This component is placed here as a shared utility to be used across the app
+// for generating payment slips, avoiding the need for new files under current constraints.
+
+interface PaymentSlipProps {
+  payerName: string;
+  payerAddress: string;
+  recipientName: string;
+  recipientAddress: string;
+  recipientIban: string;
+  amount: number;
+  currency: string;
+  model: string;
+  pozivNaBroj: string;
+  sifraNamjene: string;
+  opisPlacanja: string;
+}
+
+const formatAmountForHub = (amount: number): string => {
+  return amount.toFixed(2).replace('.', ',');
+};
+
+const cleanStringForHub = (str: string, maxLength: number): string => {
+    if (!str) return '';
+    const replacements: { [key: string]: string } = {
+        'Č': 'C', 'č': 'c', 'Ć': 'C', 'ć': 'c',
+        'Đ': 'D', 'đ': 'd', 'Š': 'S', 'š': 's',
+        'Ž': 'Z', 'ž': 'z'
+    };
+    let cleaned = str.replace(/[ČčĆćĐđŠšŽž]/g, c => replacements[c] || c);
+    cleaned = cleaned.replace(/[^a-zA-Z0-9\s.,-]/g, '');
+    return cleaned.substring(0, maxLength);
+};
+
+export const PaymentSlip: React.FC<PaymentSlipProps> = (props) => {
+    const {
+        payerName, payerAddress, recipientName, recipientAddress, recipientIban,
+        amount, currency, model, pozivNaBroj, sifraNamjene, opisPlacanja
+    } = props;
+
+    // Split address into street and city for HUB3A standard which has separate fields
+    const [payerStreet = '', ...payerCityParts] = (payerAddress || '').split(',');
+    const payerCity = payerCityParts.join(',').trim();
+
+    const [recipientStreet = '', ...recipientCityParts] = (recipientAddress || '').split(',');
+    const recipientCity = recipientCityParts.join(',').trim();
+
+    const hub3aData = [
+        'HRK',
+        'HUB3A',
+        'UTF-8',
+        'EUR',
+        formatAmountForHub(amount),
+        cleanStringForHub(payerName, 25),
+        cleanStringForHub(payerStreet, 25),
+        cleanStringForHub(payerCity, 27),
+        cleanStringForHub(recipientName, 25),
+        cleanStringForHub(recipientStreet, 25),
+        cleanStringForHub(recipientCity, 27),
+        recipientIban,
+        model,
+        pozivNaBroj,
+        sifraNamjene,
+        cleanStringForHub(opisPlacanja, 35),
+        ''
+    ].join('\n');
+
+    const formattedAmount = new Intl.NumberFormat('hr-HR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+
+    return (
+      <div className="bg-white p-4 font-mono text-[9pt] border border-black" style={{ width: '180mm', height: '80mm' }}>
+        <h2 className="text-center font-bold text-[11pt] mb-2">NALOG ZA NACIONALNA PLAĆANJA</h2>
+        <div className="grid grid-cols-[1fr_1fr] gap-x-4">
+          <div>
+            <div className="flex">
+              <div className="w-[120px] h-[120px] flex flex-col items-center justify-center">
+                <div style={{ background: 'white', padding: '4px' }}>
+                    <QRCode
+                        value={hub3aData}
+                        size={112}
+                        level="M"
+                        viewBox={`0 0 112 112`}
+                    />
+                </div>
+                <p className="text-[7pt] text-center">BKOD</p>
+              </div>
+              <div className="flex-1 pl-2">
+                <div className="border-b border-black pb-1 mb-1 h-[3em]">
+                  <label className="block text-[7pt]">IBAN platitelja</label>
+                  <span>&nbsp;</span>
+                </div>
+                <div className="border-b border-black pb-1 h-[3em]">
+                  <label className="block text-[7pt]">Model i poziv na broj platitelja</label>
+                   <span>&nbsp;</span>
+                </div>
+              </div>
+            </div>
+            <div className="border-b border-black pb-1 mt-1 h-[3.5em]">
+              <label className="block text-[7pt]">Platitelj</label>
+              <p className="text-[8pt]">{payerName}</p>
+              <p className="text-[8pt]">{payerAddress}</p>
+            </div>
+             <div className="border-b border-black pb-1 mt-1 h-[3.5em]">
+              <label className="block text-[7pt]">Primatelj</label>
+              <p className="text-[8pt]">{recipientName}</p>
+              <p className="text-[8pt]">{recipientAddress}</p>
+            </div>
+          </div>
+          <div>
+             <div className="flex">
+                <div className="border-b border-black pb-1 w-[40mm]">
+                    <label className="block text-[7pt]">Valuta plaćanja</label>
+                    <p className="font-bold">{currency}</p>
+                </div>
+                <div className="border-b border-black pb-1 flex-1">
+                    <label className="block text-[7pt]">Iznos</label>
+                    <p className="font-bold text-right">{formattedAmount}</p>
+                </div>
+             </div>
+             <div className="border-b border-black pb-1 mt-1 h-[3em]">
+                <label className="block text-[7pt]">IBAN primatelja</label>
+                <p>{recipientIban}</p>
+             </div>
+             <div className="flex">
+                <div className="border-b border-black pb-1 mt-1 w-[40mm]">
+                    <label className="block text-[7pt]">Model</label>
+                    <p>{model}</p>
+                </div>
+                <div className="border-b border-black pb-1 mt-1 flex-1">
+                    <label className="block text-[7pt]">Poziv na broj primatelja</label>
+                    <p>{pozivNaBroj}</p>
+                </div>
+             </div>
+             <div className="border-b border-black pb-1 mt-1 h-[2em]">
+                <label className="block text-[7pt]">Šifra namjene</label>
+                <p>{sifraNamjene}</p>
+             </div>
+             <div className="border-b border-black pb-1 mt-1 h-[4.5em] overflow-hidden">
+                <label className="block text-[7pt]">Opis plaćanja</label>
+                <p className="text-[8pt]">{opisPlacanja}</p>
+             </div>
+              <div className="text-right mt-2">
+                <p className="text-[7pt]">Datum izvršenja</p>
+              </div>
+          </div>
+        </div>
+      </div>
+    );
+};

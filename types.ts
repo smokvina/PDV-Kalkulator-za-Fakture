@@ -1,3 +1,9 @@
+export interface DebugInfo {
+  processingTimeMs: number;
+  modelUsed: string;
+  rawError: string;
+}
+
 export interface InvoiceData {
   meta: {
     parsed_at: string;
@@ -48,4 +54,5 @@ export interface ProcessedFile {
   data: InvoiceData | null;
   status: 'queue' | 'loading' | 'success' | 'error';
   error: string | null;
+  debugInfo?: DebugInfo | null;
 }

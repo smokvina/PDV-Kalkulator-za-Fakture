@@ -12,7 +12,7 @@ import { SummaryReport } from './components/SummaryReport';
 import { EmailModal } from './components/EmailModal';
 import { INVOICE_SYSTEM_PROMPT, INVOICE_SCHEMA } from './constants';
 import type { InvoiceData, ProcessedFile } from './types';
-import { IconBook } from './components/Icons';
+import { IconBook, IconSun, IconMoon } from './components/Icons';
 
 // Helper function to convert file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -63,6 +63,34 @@ const App: React.FC = () => {
   const [filesToPrint, setFilesToPrint] = useState<ProcessedFile[] | null>(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false);
   const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    // Check for saved theme in localStorage or system preference
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme) {
+      setTheme(savedTheme);
+    } else if (systemPrefersDark) {
+      setTheme('dark');
+    }
+  }, []);
+
+  useEffect(() => {
+    // Apply theme class to the root element
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const handleThemeToggle = () => {
+    setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
+  };
 
 
   const handleFileSelection = useCallback((files: File[]) => {
@@ -72,6 +100,7 @@ const App: React.FC = () => {
       data: null,
       status: 'queue',
       error: null,
+      debugInfo: null,
     }));
     setProcessedFiles(prevFiles => {
       const existingIds = new Set(prevFiles.map(f => f.id));
@@ -87,6 +116,9 @@ const App: React.FC = () => {
     }
 
     setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'loading' } : f));
+    
+    const startTime = Date.now();
+    const modelName = 'gemini-2.5-flash';
 
     try {
       const { file: finalFile, mimeType } = await prepareFileForApi(fileToProcess.file);
@@ -95,7 +127,7 @@ const App: React.FC = () => {
       const base64Data = await fileToBase64(finalFile);
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: modelName,
         contents: {
           parts: [
             {
@@ -126,6 +158,7 @@ const App: React.FC = () => {
       setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'success', data: parsedJson as InvoiceData } : f));
 
     } catch (e) {
+      const endTime = Date.now();
       console.error("Greška pri parsiranju fakture:", e);
       let errorMessage = "Došlo je do neočekivane pogreške prilikom obrade.";
        if (e instanceof Error) {
@@ -135,7 +168,14 @@ const App: React.FC = () => {
                errorMessage = e.message;
            }
        }
-      setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'error', error: errorMessage } : f));
+       
+      const debugInfo = {
+        processingTimeMs: endTime - startTime,
+        modelUsed: modelName,
+        rawError: e instanceof Error ? e.stack || e.message : String(e),
+      };
+
+      setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'error', error: errorMessage, debugInfo } : f));
     }
   }, []);
 
@@ -489,29 +529,40 @@ const App: React.FC = () => {
             onSend={handleEmailSend}
             isSending={isSendingEmail}
         />
-        <header className="bg-white shadow-sm">
+        <header className="bg-white shadow-sm dark:bg-slate-800 dark:border-b dark:border-slate-700">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="bg-primary text-white p-2 rounded-lg">
                 <IconBook className="h-6 w-6" />
               </div>
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-800">PDV Kalkulator za Fakture</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">PDV Kalkulator za Fakture</h1>
             </div>
+             <button
+                onClick={handleThemeToggle}
+                className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                aria-label="Toggle theme"
+            >
+                {theme === 'light' ? (
+                    <IconMoon className="h-5 w-5" />
+                ) : (
+                    <IconSun className="h-5 w-5" />
+                )}
+            </button>
           </div>
         </header>
         
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-4xl mx-auto">
-            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200">
-              <h2 className="text-xl font-semibold text-slate-700 mb-1">Učitajte Fakture</h2>
-              <p className="text-slate-500 mb-6">Sustav će automatski izvući podatke za svaku datoteku (PDF, JPG, PNG, HEIC) koristeći Gemini AI.</p>
+            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200 dark:bg-card dark:border-border">
+              <h2 className="text-xl font-semibold text-slate-700 dark:text-text mb-1">Učitajte Fakture</h2>
+              <p className="text-slate-500 dark:text-text-secondary mb-6">Sustav će automatski izvući podatke za svaku datoteku (PDF, JPG, PNG, HEIC) koristeći Gemini AI.</p>
               <FileUpload onFileSelect={handleFileSelection} disabled={anyProcessRunning} />
             </div>
 
             {processedFiles.length > 0 && (
               <div className="mt-8 space-y-4">
                  <div className="flex justify-between items-center px-2">
-                  <h3 className="text-xl font-semibold text-slate-700">Rezultati obrade</h3>
+                  <h3 className="text-xl font-semibold text-slate-700 dark:text-text">Rezultati obrade</h3>
                    <div className="flex items-center space-x-2">
                     <button
                       onClick={handleClearAll}
@@ -538,7 +589,7 @@ const App: React.FC = () => {
             )}
           </div>
         </main>
-         <footer className="text-center py-6 text-sm text-slate-500">
+         <footer className="text-center py-6 text-sm text-slate-500 dark:text-text-secondary">
           <p>&copy; {new Date().getFullYear()} PDV Kalkulator. Pokreće Gemini AI.</p>
           <p className="mt-2">
             <a 

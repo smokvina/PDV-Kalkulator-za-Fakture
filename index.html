@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
+        darkMode: 'class', // Enable class-based dark mode
         theme: {
           extend: {
             colors: {
@@ -23,6 +24,29 @@
       }
     </script>
     <style>
+      :root {
+        --primary-color: #2563eb;
+        --secondary-color: #4f46e5;
+        --background-color: #f8fafc; /* slate-50 */
+        --card-color: #ffffff;
+        --text-color: #1e293b; /* slate-800 */
+        --text-secondary-color: #64748b; /* slate-500 */
+        --border-color: #e2e8f0; /* slate-200 */
+      }
+      .dark {
+        --primary-color: #3b82f6; /* blue-500 */
+        --secondary-color: #6366f1; /* indigo-500 */
+        --background-color: #0f172a; /* slate-900 */
+        --card-color: #1e293b; /* slate-800 */
+        --text-color: #f1f5f9; /* slate-100 */
+        --text-secondary-color: #94a3b8; /* slate-400 */
+        --border-color: #334155; /* slate-700 */
+      }
+      /* Smooth transition for theme changes. Applies to elements that have explicit background colors too. */
+      body, .bg-background, .bg-white, .bg-card, .bg-slate-50, .bg-slate-100, .bg-slate-50\/70, .bg-slate-50\S_70, .dark .bg-slate-800 {
+        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+      }
+
       @media print {
         /* The main app content is hidden using a 'hidden' class from App.tsx */
         .print-container {
@@ -98,7 +122,8 @@
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1",
     "pdf-lib": "https://aistudiocdn.com/pdf-lib@^1.17.1",
-    "heic2any": "https://aistudiocdn.com/heic2any@^0.0.4"
+    "heic2any": "https://aistudiocdn.com/heic2any@^0.0.4",
+    "react-qr-code": "https://aistudiocdn.com/react-qr-code@^2.0.12"
   }
 }
 </script>

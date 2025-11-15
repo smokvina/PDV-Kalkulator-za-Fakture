@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { ProcessedFile, InvoiceData } from '../types';
 import { ResultsDisplay } from './ResultsDisplay';
-import { IconLoader, IconAlertTriangle, IconCheckCircle, IconChevronDown, IconFile } from './Icons';
+import { IconLoader, IconAlertTriangle, IconCheckCircle, IconChevronDown, IconFile, IconCode } from './Icons';
 
 interface FileResultDisplayProps {
   processedFile: ProcessedFile;
@@ -72,6 +72,7 @@ const getErrorSuggestions = (error: string | null): string[] => {
 
 export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedFile, onDataUpdate, onPrintSingle }) => {
   const [isExpanded, setIsExpanded] = useState(processedFile.status !== 'success');
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
   
   React.useEffect(() => {
     // Automatically expand results once they are processed (success or error)
@@ -159,6 +160,25 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
                                   ))}
                               </ul>
                           </div>
+                          {processedFile.debugInfo && (
+                            <div className="mt-4 pt-4 border-t border-red-300">
+                              <button
+                                onClick={() => setShowDebugInfo(!showDebugInfo)}
+                                className="flex items-center text-sm font-semibold text-red-800 hover:text-red-900 focus:outline-none"
+                              >
+                                <IconCode className="w-4 h-4 mr-1.5" />
+                                <span>{showDebugInfo ? 'Sakrij tehničke detalje' : 'Prikaži tehničke detalje'}</span>
+                              </button>
+                              {showDebugInfo && (
+                                <div className="mt-2 text-xs text-red-900 bg-red-200 p-3 rounded-md font-mono">
+                                  <p><strong>Vrijeme obrade:</strong> {processedFile.debugInfo.processingTimeMs} ms</p>
+                                  <p><strong>Korišteni model:</strong> {processedFile.debugInfo.modelUsed}</p>
+                                  <p className="mt-2"><strong>Sirova greška:</strong></p>
+                                  <pre className="whitespace-pre-wrap break-all mt-1">{processedFile.debugInfo.rawError}</pre>
+                                </div>
+                              )}
+                            </div>
+                          )}
                       </div>
                   </div>
               </div>

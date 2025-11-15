@@ -1,10 +1,11 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import ReactDOM from 'react-dom/client';
 import type { InvoiceData } from '../types';
 import { ReportContent } from './ReportContent';
 import { CollapsibleSection } from './CollapsibleSection';
-import { IconPencil, IconDownload, IconPrinter, IconInfo } from './Icons';
+import { IconPencil, IconDownload, IconPrinter, IconInfo, IconBarcode, PaymentSlip } from './Icons';
 
 interface ResultsDisplayProps {
   initialData: InvoiceData;
@@ -13,16 +14,16 @@ interface ResultsDisplayProps {
   onPrint: () => void;
 }
 
-const createSafeFilename = (supplier: string, invoiceNumber: string, invoiceDate: string): string => {
+const createSafeFilename = (prefix: string, supplier: string, invoiceNumber: string): string => {
     const sanitize = (str: string) => str ? String(str).replace(/[\s\\/:"*?<>|]+/g, '_') : '';
     const parts = [
+        prefix,
         sanitize(supplier),
-        sanitize(invoiceNumber),
-        sanitize(invoiceDate)
-    ].filter(Boolean); // Filtriraj prazne dijelove koji mogu nastati zbog nedostatka podataka
+        sanitize(invoiceNumber)
+    ].filter(Boolean);
 
-    if (parts.length === 0) {
-        return `izvjestaj_${new Date().toISOString().split('T')[0]}.pdf`;
+    if (parts.length <= 1) {
+        return `${prefix || 'dokument'}_${new Date().toISOString().split('T')[0]}.pdf`;
     }
 
     return `${parts.join('_')}.pdf`;
@@ -33,6 +34,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<InvoiceData>(initialData);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isGeneratingPaymentPdf, setIsGeneratingPaymentPdf] = useState(false);
   const reportContentRef = useRef<HTMLDivElement>(null);
 
   const calculateVatBase = useMemo(() => {
@@ -128,9 +130,9 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
         pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
         
         const filename = createSafeFilename(
+            'Izvjestaj',
             formData.supplier.name,
-            formData.invoice.invoice_number,
-            formData.invoice.invoice_date
+            formData.invoice.invoice_number
         );
         pdf.save(filename);
 
@@ -142,10 +144,79 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
     }
   };
 
+  const handleGeneratePaymentPdf = async () => {
+    setIsGeneratingPaymentPdf(true);
+    try {
+        const container = document.createElement('div');
+        container.style.position = 'absolute';
+        container.style.left = '-9999px';
+        container.style.width = '180mm';
+        document.body.appendChild(container);
+
+        const root = ReactDOM.createRoot(container);
+
+        const oib = formData.buyer.vat_id.toUpperCase().replace('HR', '');
+        const period = formData.invoice.service_period_to;
+        const periodFormatted = period ? `${period.substring(5, 7)}${period.substring(2, 4)}` : '';
+
+        const slipProps = {
+            payerName: formData.buyer.name,
+            payerAddress: formData.buyer.address,
+            recipientName: 'MINISTARSTVO FINANCIJA, POREZNA UPRAVA',
+            recipientAddress: 'A. Vončinina 3, 10000 Zagreb',
+            recipientIban: 'HR1210010051863000160',
+            amount: formData.calculations.vat_amount,
+            currency: 'EUR',
+            model: 'HR68',
+            pozivNaBroj: `${oib}-${periodFormatted}`,
+            sifraNamjene: 'PDVD',
+            opisPlacanja: `Uplata PDV po računu ${formData.invoice.invoice_number}`,
+        };
+        
+        root.render(
+            <React.StrictMode>
+                <PaymentSlip {...slipProps} />
+            </React.StrictMode>
+        );
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const canvas = await html2canvas(container, { scale: 3, useCORS: true });
+        
+        root.unmount();
+        document.body.removeChild(container);
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+            orientation: 'l',
+            unit: 'mm',
+            format: [85, 185]
+        });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+
+        const filename = createSafeFilename(
+            'Uplatnica',
+            formData.supplier.name,
+            formData.invoice.invoice_number
+        );
+        pdf.save(filename);
+
+    } catch (error) {
+        console.error("Greška pri generiranju PDF uplatnice:", error);
+        alert("Došlo je do greške pri generiranju PDF uplatnice.");
+    } finally {
+        setIsGeneratingPaymentPdf(false);
+    }
+  };
+
   if (isEditing) {
     return (
-      <div className="p-4 bg-slate-50 rounded-lg">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">Uređivanje podataka</h3>
+      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+        <h3 className="text-xl font-bold text-primary text-center mb-6">Uređivanje podataka</h3>
         
         <div className="space-y-4">
             <CollapsibleSection title="Dobavljač" defaultOpen>
@@ -202,21 +273,21 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                     <CheckboxField label="Primjenjuje se prijenos porezne obveze (Reverse Charge)" name="actions.reverse_charge_applies" checked={formData.actions.reverse_charge_applies} onChange={handleInputChange} />
                     <CheckboxField label="Potreban ručni pregled" name="actions.manual_review_required" checked={formData.actions.manual_review_required} onChange={handleInputChange} />
                     <div>
-                        <label className="block text-sm font-medium text-slate-600 mb-1">Upute za PDV Prijavu</label>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Upute za PDV Prijavu</label>
                          <textarea 
                             name="actions.instructions_for_pdv_form"
                             value={formData.actions.instructions_for_pdv_form}
                             onChange={handleInputChange}
                             rows={5}
-                            className="w-full mt-1 p-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm font-mono"
+                            className="w-full mt-1 p-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm font-mono dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200"
                         />
                     </div>
                 </div>
             </CollapsibleSection>
         </div>
 
-        <div className="flex justify-end items-center space-x-3 mt-6 pt-4 border-t border-slate-200">
-            <button onClick={handleCancel} className="text-sm font-semibold text-slate-600 px-4 py-2 rounded-lg hover:bg-slate-200">
+        <div className="flex justify-end items-center space-x-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <button onClick={handleCancel} className="text-sm font-semibold text-slate-600 dark:text-slate-300 px-4 py-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600">
                 Odustani
             </button>
             <button onClick={handleSave} className="text-sm font-semibold text-white bg-primary px-4 py-2 rounded-lg hover:bg-primary/90 shadow-sm">
@@ -229,23 +300,32 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
 
   return (
     <div>
-        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
-            <div className="flex items-center text-sm text-slate-500">
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-200 dark:border-border">
+            <div className="flex items-center text-sm text-slate-500 dark:text-text-secondary">
                 <IconInfo className="w-4 h-4 mr-2"/>
                 <span>Ovo je AI-generirani sažetak. Podatke možete urediti po potrebi.</span>
             </div>
             <div className="flex items-center space-x-2">
                 <button 
                     onClick={() => setIsEditing(true)} 
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50"
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
                     title="Uredi podatke"
                 >
                     <IconPencil className="w-4 h-4 mr-1.5" />
                     <span>Uredi</span>
                 </button>
+                <button 
+                    onClick={handleGeneratePaymentPdf} 
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
+                    title="Generiraj uplatnicu"
+                    disabled={isGeneratingPaymentPdf}
+                >
+                    <IconBarcode className="w-4 h-4 mr-1.5" />
+                    <span>{isGeneratingPaymentPdf ? 'Generiram...' : 'Uplatnica'}</span>
+                </button>
                  <button 
                     onClick={handleGeneratePdf} 
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50"
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
                     title="Preuzmi kao PDF"
                     disabled={isGeneratingPdf}
                 >
@@ -254,7 +334,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                 </button>
                  <button 
                     onClick={onPrint} 
-                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50"
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-600"
                     title="Ispiši"
                 >
                     <IconPrinter className="w-4 h-4 mr-1.5" />
@@ -282,7 +362,7 @@ interface InputFieldProps {
 
 const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, type = 'text', readOnly = false, helpText }) => (
     <div>
-        <label htmlFor={name} className="block text-sm font-medium text-slate-600 mb-1">{label}</label>
+        <label htmlFor={name} className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">{label}</label>
         <input
             type={type}
             id={name}
@@ -291,9 +371,9 @@ const InputField: React.FC<InputFieldProps> = ({ label, name, value, onChange, t
             onChange={onChange}
             readOnly={readOnly}
             step={type === 'number' ? '0.01' : undefined}
-            className={`w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm ${readOnly ? 'bg-slate-100 cursor-not-allowed' : ''}`}
+            className={`w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary focus:border-primary text-sm dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 ${readOnly ? 'bg-slate-100 dark:bg-slate-600 cursor-not-allowed' : ''}`}
         />
-        {helpText && <p className="mt-1 text-xs text-slate-500">{helpText}</p>}
+        {helpText && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{helpText}</p>}
     </div>
 );
 
@@ -312,8 +392,8 @@ const CheckboxField: React.FC<CheckboxFieldProps> = ({ label, name, checked, onC
             name={name}
             checked={checked}
             onChange={onChange}
-            className="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded"
+            className="h-4 w-4 text-primary focus:ring-primary border-slate-300 rounded dark:bg-slate-600 dark:border-slate-500"
         />
-        <label htmlFor={name} className="ml-2 block text-sm font-medium text-slate-700">{label}</label>
+        <label htmlFor={name} className="ml-2 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}</label>
     </div>
 );

@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
+import ReactDOM from 'react-dom/client';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import type { ProcessedFile, InvoiceData } from '../types';
 import { FileResultDisplay } from './FileResultDisplay';
-import { IconDownload, IconPrinter, IconBook, IconClipboard, IconMail, IconLayers } from './Icons';
+import { IconDownload, IconPrinter, IconBook, IconClipboard, IconMail, IconLayers, IconBarcode, PaymentSlip } from './Icons';
 
 interface ResultsListProps {
     files: ProcessedFile[];
@@ -28,6 +31,8 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
     onOpenEmailModal,
     isProcessing,
 }) => {
+    const [isGeneratingSummaryPaymentPdf, setIsGeneratingSummaryPaymentPdf] = useState(false);
+    
     const successfulFiles = files.filter(f => f.status === 'success' && f.data);
     const hasSuccessfulFiles = successfulFiles.length > 0;
     const hasAnyFiles = files.length > 0;
@@ -35,10 +40,84 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
     const disabledForSuccessful = isProcessing || !hasSuccessfulFiles;
     const disabledForAny = isProcessing || !hasAnyFiles;
 
+    const handleGenerateSummaryPaymentPdf = async () => {
+        if (!hasSuccessfulFiles) return;
+        setIsGeneratingSummaryPaymentPdf(true);
+        try {
+            const totalVat = successfulFiles.reduce((acc, f) => acc + (f.data?.calculations.vat_amount || 0), 0);
+            if (totalVat <= 0) {
+                alert("Ukupan iznos PDV-a je 0. Nema potrebe za generiranjem uplatnice.");
+                setIsGeneratingSummaryPaymentPdf(false);
+                return;
+            }
+
+            const firstFile = successfulFiles[0].data!;
+            const latestPeriodFile = successfulFiles.reduce((latest, current) => 
+                new Date(latest.data!.invoice.service_period_to) > new Date(current.data!.invoice.service_period_to) ? latest : current
+            );
+            const latestPeriod = latestPeriodFile.data!.invoice.service_period_to;
+            const periodFormatted = latestPeriod ? `${latestPeriod.substring(5, 7)}${latestPeriod.substring(2, 4)}` : '';
+            const oib = firstFile.buyer.vat_id.toUpperCase().replace('HR', '');
+
+            const container = document.createElement('div');
+            container.style.position = 'absolute';
+            container.style.left = '-9999px';
+            container.style.width = '180mm';
+            document.body.appendChild(container);
+
+            const root = ReactDOM.createRoot(container);
+            const slipProps = {
+                payerName: firstFile.buyer.name,
+                payerAddress: firstFile.buyer.address,
+                recipientName: 'MINISTARSTVO FINANCIJA, POREZNA UPRAVA',
+                recipientAddress: 'A. Vončinina 3, 10000 Zagreb',
+                recipientIban: 'HR1210010051863000160',
+                amount: totalVat,
+                currency: 'EUR',
+                model: 'HR68',
+                pozivNaBroj: `${oib}-${periodFormatted}`,
+                sifraNamjene: 'PDVD',
+                opisPlacanja: `Zbirna uplata PDV za razdoblje ${periodFormatted.substring(0,2)}/${periodFormatted.substring(2,4)}`,
+            };
+            
+            root.render(<React.StrictMode><PaymentSlip {...slipProps} /></React.StrictMode>);
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const canvas = await html2canvas(container, { scale: 3, useCORS: true });
+            
+            root.unmount();
+            document.body.removeChild(container);
+            
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({ orientation: 'l', unit: 'mm', format: [85, 185] });
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+            pdf.save(`Zbirna_uplatnica_PDV_${periodFormatted}.pdf`);
+
+        } catch (error) {
+            console.error("Greška pri generiranju zbirne PDF uplatnice:", error);
+            alert("Došlo je do greške pri generiranju zbirne PDF uplatnice.");
+        } finally {
+            setIsGeneratingSummaryPaymentPdf(false);
+        }
+    };
+
     return (
         <div className="mt-6">
             {/* Global Actions */}
             <div className="flex justify-end items-center flex-wrap gap-2 p-4 bg-slate-50 rounded-xl border border-slate-200 mb-6">
+                 <button
+                    onClick={handleGenerateSummaryPaymentPdf}
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={disabledForSuccessful || isGeneratingSummaryPaymentPdf}
+                    title="Generiraj zbirnu uplatnicu za PDV"
+                >
+                    <IconBarcode className="w-4 h-4 mr-2" />
+                    <span>{isGeneratingSummaryPaymentPdf ? 'Generiram...' : 'Zbirna uplatnica'}</span>
+                </button>
                  <button
                     onClick={onDownloadSummary}
                     className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"

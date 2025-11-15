@@ -140,20 +140,20 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
           )}
           {processedFile.status === 'error' && (
             <div className="p-4 sm:p-6">
-              <div className="bg-red-50 p-4 rounded-lg">
-                  <div className="flex items-start space-x-3 text-red-800">
-                      <IconAlertTriangle className="h-6 w-6 flex-shrink-0 mt-0.5" />
-                      <div className="flex-1">
-                          <h4 className="font-bold text-lg text-red-900">Obrada nije uspjela</h4>
-                          
-                          <div className="mt-2 text-sm text-red-900 bg-red-100 p-3 rounded-md">
+              <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+                  <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                          <IconAlertTriangle className="h-6 w-6 text-red-500" />
+                      </div>
+                      <div className="ml-3 flex-1">
+                          <h3 className="text-lg font-bold text-red-900">Obrada nije uspjela</h3>
+                          <div className="mt-2 text-sm text-red-800 bg-red-200 p-3 rounded-md">
                               <p className="font-semibold">Detalji greške:</p>
-                              <p className="font-mono break-words text-xs">{processedFile.error}</p>
+                              <p className="font-mono break-words">{processedFile.error}</p>
                           </div>
-
                           <div className="mt-4">
-                              <p className="font-semibold text-red-900">Što možete pokušati?</p>
-                              <ul className="list-disc list-inside mt-1 space-y-1 text-sm text-red-800">
+                              <p className="font-bold text-red-900">Što možete pokušati?</p>
+                              <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-red-800">
                                   {getErrorSuggestions(processedFile.error).map((suggestion, index) => (
                                       <li key={index}>{suggestion}</li>
                                   ))}

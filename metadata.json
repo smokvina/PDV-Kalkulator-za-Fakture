@@ -1,5 +1,5 @@
 {
-  "name": "PDV Kalkulator za Fakture",
+  "name": "PDV Kalkulator za Fakture 2",
   "description": "Aplikacija za automatsku obradu i izračun PDV-a s faktura turističkih platformi poput Booking.com, koristeći Gemini AI. Učitajte PDF fakturu, a aplikacija će automatski izvući podatke, primijeniti pravilo prijenosa porezne obveze (reverse charge) i generirati upute za popunjavanje PDV prijave.",
   "requestFramePermissions": []
 }

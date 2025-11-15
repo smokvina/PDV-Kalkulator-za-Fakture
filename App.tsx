@@ -3,12 +3,16 @@ import ReactDOM from 'react-dom/client';
 import { GoogleGenAI } from '@google/genai';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { PDFDocument } from 'pdf-lib';
+import heic2any from 'heic2any';
 import { FileUpload } from './components/FileUpload';
-import { FileResultDisplay } from './components/FileResultDisplay';
+import { GroupedInvoiceSelector } from './components/GroupedInvoiceSelector';
 import { ReportContent } from './components/ReportContent';
+import { SummaryReport } from './components/SummaryReport';
+import { EmailModal } from './components/EmailModal';
 import { INVOICE_SYSTEM_PROMPT, INVOICE_SCHEMA } from './constants';
 import type { InvoiceData, ProcessedFile } from './types';
-import { IconBook, IconDownload, IconPrinter } from './components/Icons';
+import { IconBook } from './components/Icons';
 
 // Helper function to convert file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -20,12 +24,45 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// Helper to handle potential HEIC conversion
+const prepareFileForApi = async (file: File): Promise<{ file: File; mimeType: string }> => {
+  const fileType = file.type.toLowerCase();
+  if (fileType === 'image/heic' || fileType === 'image/heif') {
+    try {
+      const conversionResult = await heic2any({
+        blob: file,
+        toType: 'image/jpeg',
+        quality: 0.9,
+      });
+      const jpegBlob = Array.isArray(conversionResult) ? conversionResult[0] : conversionResult;
+      
+      const jpegFile = new File([jpegBlob], `${file.name.split('.').slice(0, -1).join('.')}.jpeg`, {
+        type: 'image/jpeg',
+        lastModified: file.lastModified,
+      });
+      return { file: jpegFile, mimeType: 'image/jpeg' };
+    } catch (e) {
+      console.error("HEIC conversion error:", e);
+      throw new Error("Konverzija HEIC datoteke nije uspjela. Datoteka je možda oštećena.");
+    }
+  }
+  // For PDF, JPG, PNG, no conversion is needed
+  return { file, mimeType: file.type };
+};
+
+
 const App: React.FC = () => {
   const [processedFiles, setProcessedFiles] = useState<ProcessedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isGeneratingCombinedPdf, setIsGeneratingCombinedPdf] = useState<boolean>(false);
+  const [isGeneratingSummaryPdf, setIsGeneratingSummaryPdf] = useState<boolean>(false);
+  const [isMergingPdfs, setIsMergingPdfs] = useState<boolean>(false);
+  const [isCombiningAll, setIsCombiningAll] = useState<boolean>(false);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [fileToPrint, setFileToPrint] = useState<ProcessedFile | null>(null);
+  const [filesToPrint, setFilesToPrint] = useState<ProcessedFile[] | null>(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false);
+  const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
 
 
   const handleFileSelection = useCallback((files: File[]) => {
@@ -52,26 +89,26 @@ const App: React.FC = () => {
     setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'loading' } : f));
 
     try {
+      const { file: finalFile, mimeType } = await prepareFileForApi(fileToProcess.file);
+
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const base64Pdf = await fileToBase64(fileToProcess.file);
+      const base64Data = await fileToBase64(finalFile);
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: [
-          {
-            parts: [
-              { text: INVOICE_SYSTEM_PROMPT },
-              {
-                inlineData: {
-                  mimeType: 'application/pdf',
-                  data: base64Pdf,
-                },
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data,
               },
-              { text: "Molim te parsiraj ovu fakturu prema sistemskim uputama." }
-            ],
-          },
-        ],
+            },
+            { text: "Molim te parsiraj ovu fakturu." }
+          ]
+        },
         config: {
+          systemInstruction: INVOICE_SYSTEM_PROMPT,
           responseMimeType: "application/json",
           responseSchema: INVOICE_SCHEMA,
         },
@@ -114,17 +151,23 @@ const App: React.FC = () => {
 
   // Effect to handle the printing process reliably
   useEffect(() => {
-    if (isPrinting) {
-      // Use a short timeout to ensure the printable content has rendered.
-      const timer = setTimeout(() => {
-        window.print();
-        // After the print dialog is closed, reset the printing state.
-        setIsPrinting(false);
-        setFileToPrint(null);
-      }, 100);
-      
-      return () => clearTimeout(timer);
-    }
+    if (!isPrinting) return;
+
+    const handleAfterPrint = () => {
+      setIsPrinting(false);
+      setFileToPrint(null);
+      setFilesToPrint(null);
+    };
+
+    window.addEventListener('afterprint', handleAfterPrint);
+    // Use a minimal timeout to ensure the DOM is ready for printing.
+    const timer = setTimeout(() => window.print(), 50);
+
+    // Cleanup function to remove the listener and clear timeout
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
   }, [isPrinting]);
 
   const handleDataUpdate = (fileId: string, updatedData: InvoiceData) => {
@@ -137,9 +180,9 @@ const App: React.FC = () => {
     setProcessedFiles([]);
   };
   
-  const handleGenerateCombinedPdf = async () => {
-    const successfulFiles = processedFiles.filter(f => f.status === 'success' && f.data);
-    if (successfulFiles.length === 0) return;
+  const handleDownloadAllPdf = async () => {
+    const filesToGenerate = processedFiles.filter(f => f.status === 'success' && f.data);
+    if (filesToGenerate.length === 0) return;
 
     setIsGeneratingCombinedPdf(true);
 
@@ -147,8 +190,8 @@ const App: React.FC = () => {
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
 
-        for (let i = 0; i < successfulFiles.length; i++) {
-            const file = successfulFiles[i];
+        for (let i = 0; i < filesToGenerate.length; i++) {
+            const file = filesToGenerate[i];
             
             const container = document.createElement('div');
             container.style.position = 'absolute';
@@ -163,7 +206,7 @@ const App: React.FC = () => {
                 </React.StrictMode>
             );
             
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, 300)); // Give some time for rendering
 
             const canvas = await html2canvas(container, { scale: 2, useCORS: true });
             
@@ -189,10 +232,194 @@ const App: React.FC = () => {
     }
   };
 
+   const handleDownloadSummaryPdf = async () => {
+        const filesToGenerate = processedFiles.filter(f => f.status === 'success' && f.data);
+        if (filesToGenerate.length === 0) return;
+
+        setIsGeneratingSummaryPdf(true);
+
+        try {
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+
+            const container = document.createElement('div');
+            container.style.position = 'absolute';
+            container.style.left = '-9999px';
+            container.style.width = '210mm';
+            document.body.appendChild(container);
+
+            const root = ReactDOM.createRoot(container);
+            root.render(
+                <React.StrictMode>
+                    <SummaryReport files={filesToGenerate} />
+                </React.StrictMode>
+            );
+
+            await new Promise(resolve => setTimeout(resolve, 300)); // Give time for rendering
+
+            const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+
+            root.unmount();
+            document.body.removeChild(container);
+
+            const imgData = canvas.toDataURL('image/png');
+            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+            
+            pdf.save(`zbirni-izvjestaj-${new Date().toISOString().split('T')[0]}.pdf`);
+
+        } catch (error) {
+            console.error("Greška pri generiranju zbirnog PDF-a:", error);
+            alert("Došlo je do greške pri generiranju zbirnog PDF-a. Molimo pokušajte ponovno.");
+        } finally {
+            setIsGeneratingSummaryPdf(false);
+        }
+    };
+
+  const handleMergeAllOriginalPdfs = async () => {
+    const filesToMerge = processedFiles.map(f => f.file).filter(f => f.type === 'application/pdf');
+    if (filesToMerge.length === 0) {
+        alert("Nema PDF datoteka za spajanje. Ova funkcija spaja samo originalne PDF dokumente.");
+        return;
+    }
+
+
+    setIsMergingPdfs(true);
+    try {
+        const mergedPdfDoc = await PDFDocument.create();
+        
+        for (const file of filesToMerge) {
+            const pdfBytes = await file.arrayBuffer();
+            const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+            const copiedPages = await mergedPdfDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
+            copiedPages.forEach((page) => {
+                mergedPdfDoc.addPage(page);
+            });
+        }
+        
+        const mergedPdfBytes = await mergedPdfDoc.save();
+        
+        const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `spojeni-originali-${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+    } catch (error) {
+        console.error("Greška pri spajanju PDF-ova:", error);
+        alert("Došlo je do greške pri spajanju PDF-ova. Provjerite jesu li sve datoteke ispravne i da nisu zaštićene lozinkom.");
+    } finally {
+        setIsMergingPdfs(false);
+    }
+  };
+
+    const handleCombineAll = async () => {
+        const filesToCombine = processedFiles.filter(f => f.status === 'success' && f.data);
+        if (filesToCombine.length === 0) return;
+
+        setIsCombiningAll(true);
+        try {
+            const combinedDoc = await PDFDocument.create();
+
+            for (const processedFile of filesToCombine) {
+                // 1. Add Original File Page(s)
+                const { file: originalFile, mimeType } = await prepareFileForApi(processedFile.file);
+
+                if (mimeType === 'application/pdf') {
+                    const pdfBytes = await originalFile.arrayBuffer();
+                    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+                    const copiedPages = await combinedDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
+                    copiedPages.forEach(page => combinedDoc.addPage(page));
+                } else if (mimeType === 'image/jpeg' || mimeType === 'image/png') {
+                    const imgBytes = await originalFile.arrayBuffer();
+                    const image = mimeType === 'image/jpeg' 
+                        ? await combinedDoc.embedJpg(imgBytes)
+                        : await combinedDoc.embedPng(imgBytes);
+                    
+                    const page = combinedDoc.addPage();
+                    const { width, height } = page.getSize();
+                    const { width: imgWidth, height: imgHeight } = image;
+                    
+                    const widthScale = (width - 50) / imgWidth;
+                    const heightScale = (height - 50) / imgHeight;
+                    const scale = Math.min(widthScale, heightScale, 1);
+                    const scaledDims = { width: imgWidth * scale, height: imgHeight * scale };
+
+                    page.drawImage(image, {
+                        x: (width - scaledDims.width) / 2,
+                        y: (height - scaledDims.height) / 2,
+                        width: scaledDims.width,
+                        height: scaledDims.height,
+                    });
+                }
+
+                // 2. Add Report Page
+                const container = document.createElement('div');
+                container.style.position = 'absolute';
+                container.style.left = '-9999px';
+                container.style.width = '210mm';
+                document.body.appendChild(container);
+
+                const root = ReactDOM.createRoot(container);
+                root.render(
+                    <React.StrictMode>
+                        <ReportContent data={processedFile.data!} originalPdfFile={processedFile.file} />
+                    </React.StrictMode>
+                );
+                
+                await new Promise(resolve => setTimeout(resolve, 300));
+
+                const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+                
+                root.unmount();
+                document.body.removeChild(container);
+
+                const pngBytes = await fetch(canvas.toDataURL('image/png')).then(res => res.arrayBuffer());
+                const reportImage = await combinedDoc.embedPng(pngBytes);
+
+                const reportPage = combinedDoc.addPage();
+                const { width: pageWidth, height: pageHeight } = reportPage.getSize();
+                const { width: reportImgWidth, height: reportImgHeight } = reportImage;
+
+                const reportScale = Math.min(pageWidth / reportImgWidth, pageHeight / reportImgHeight);
+                const reportScaled = { width: reportImgWidth * reportScale, height: reportImgHeight * reportScale };
+
+                reportPage.drawImage(reportImage, {
+                    x: (pageWidth - reportScaled.width) / 2,
+                    y: (pageHeight - reportScaled.height) / 2,
+                    width: reportScaled.width,
+                    height: reportScaled.height,
+                });
+            }
+
+            // 3. Save and Download
+            const combinedPdfBytes = await combinedDoc.save();
+            const blob = new Blob([combinedPdfBytes], { type: 'application/pdf' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `kombinirano_sve-${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+
+        } catch (error) {
+            console.error("Greška pri kombiniranju svih dokumenata:", error);
+            alert("Došlo je do greške pri kombiniranju dokumenata.");
+        } finally {
+            setIsCombiningAll(false);
+        }
+    };
+
+
   const handlePrintAll = () => {
-    const successfulFiles = processedFiles.filter(f => f.status === 'success' && f.data);
-    if (successfulFiles.length === 0) return;
-    setFileToPrint(null); // Ensure we're printing all, not a single file
+    const files = processedFiles.filter(f => f.status === 'success' && f.data);
+    if (files.length === 0) return;
+    setFileToPrint(null);
+    setFilesToPrint(files);
     setIsPrinting(true);
   };
   
@@ -200,11 +427,41 @@ const App: React.FC = () => {
     const file = processedFiles.find(f => f.id === fileId);
     if (file && file.status === 'success' && file.data) {
       setFileToPrint(file);
+      setFilesToPrint(null);
       setIsPrinting(true);
     }
   };
 
-  const successfulFiles = processedFiles.filter(f => f.status === 'success' && f.data);
+  const handleOpenEmailModal = () => setIsEmailModalOpen(true);
+  const handleCloseEmailModal = () => setIsEmailModalOpen(false);
+
+  const handleEmailSend = async (details: { email: string; reportType: 'summary' | 'all' }) => {
+      setIsSendingEmail(true);
+      try {
+          if (details.reportType === 'summary') {
+              await handleDownloadSummaryPdf();
+          } else {
+              await handleDownloadAllPdf();
+          }
+
+          const subject = 'Izvještaji o obradi faktura';
+          const body = `Poštovani,\n\nMolimo pronađite tražene izvještaje u prilogu koji je upravo preuzet na Vaše računalo.\n\nS poštovanjem,\nPDV Kalkulator`;
+          
+          // Use timeout to give browser time to initiate download before mailto link
+          setTimeout(() => {
+              window.location.href = `mailto:${details.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+              handleCloseEmailModal();
+          }, 500);
+
+      } catch (error) {
+          console.error("Greška pri pripremi emaila:", error);
+          alert("Došlo je do greške prilikom generiranja PDF-a za slanje.");
+      } finally {
+          setIsSendingEmail(false);
+      }
+  };
+
+  const anyProcessRunning = isProcessing || isGeneratingCombinedPdf || isGeneratingSummaryPdf || isMergingPdfs || isCombiningAll;
 
   return (
     <>
@@ -216,8 +473,8 @@ const App: React.FC = () => {
                 <ReportContent data={fileToPrint.data!} originalPdfFile={fileToPrint.file} />
               </div>
             ) : (
-              // Printing all successful files
-              successfulFiles.map(file => (
+              // Printing all selected successful files
+              filesToPrint?.map(file => (
                 <div key={file.id} className="printable-page">
                   <ReportContent data={file.data!} originalPdfFile={file.file} />
                 </div>
@@ -226,6 +483,12 @@ const App: React.FC = () => {
         </div>
       )}
       <div className={`min-h-screen bg-slate-50 font-sans ${isPrinting ? 'hidden' : ''}`}>
+        <EmailModal
+            isOpen={isEmailModalOpen}
+            onClose={handleCloseEmailModal}
+            onSend={handleEmailSend}
+            isSending={isSendingEmail}
+        />
         <header className="bg-white shadow-sm">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -240,9 +503,9 @@ const App: React.FC = () => {
         <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg border border-slate-200">
-              <h2 className="text-xl font-semibold text-slate-700 mb-1">Učitajte PDF Fakture</h2>
-              <p className="text-slate-500 mb-6">Sustav će automatski izvući podatke za svaku datoteku koristeći Gemini AI.</p>
-              <FileUpload onFileSelect={handleFileSelection} disabled={isProcessing || isGeneratingCombinedPdf} />
+              <h2 className="text-xl font-semibold text-slate-700 mb-1">Učitajte Fakture</h2>
+              <p className="text-slate-500 mb-6">Sustav će automatski izvući podatke za svaku datoteku (PDF, JPG, PNG, HEIC) koristeći Gemini AI.</p>
+              <FileUpload onFileSelect={handleFileSelection} disabled={anyProcessRunning} />
             </div>
 
             {processedFiles.length > 0 && (
@@ -250,45 +513,27 @@ const App: React.FC = () => {
                  <div className="flex justify-between items-center px-2">
                   <h3 className="text-xl font-semibold text-slate-700">Rezultati obrade</h3>
                    <div className="flex items-center space-x-2">
-                    {successfulFiles.length > 1 && (
-                      <>
-                        <button
-                          onClick={handleGenerateCombinedPdf}
-                          className="flex items-center text-sm font-semibold bg-white border border-primary text-primary px-3 py-1.5 rounded-lg shadow-sm hover:bg-primary/5 disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={isProcessing || isGeneratingCombinedPdf}
-                          title="Preuzmi sve kao jedan PDF dokument"
-                        >
-                          <IconDownload className="w-4 h-4 mr-1.5" />
-                          <span>{isGeneratingCombinedPdf ? 'Generiram...' : 'Preuzmi sve (PDF)'}</span>
-                        </button>
-                         <button
-                          onClick={handlePrintAll}
-                          className="flex items-center text-sm font-semibold bg-white border border-secondary text-secondary px-3 py-1.5 rounded-lg shadow-sm hover:bg-secondary/5 disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={isProcessing || isGeneratingCombinedPdf}
-                          title="Ispiši sve izvještaje"
-                        >
-                          <IconPrinter className="w-4 h-4 mr-1.5" />
-                          <span>Ispiši sve</span>
-                        </button>
-                      </>
-                    )}
                     <button
                       onClick={handleClearAll}
                       className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                      disabled={isProcessing || isGeneratingCombinedPdf}
+                      disabled={anyProcessRunning}
                     >
                       Očisti sve
                     </button>
                   </div>
                 </div>
-                {processedFiles.map(pf => (
-                  <FileResultDisplay
-                    key={pf.id}
-                    processedFile={pf}
-                    onDataUpdate={(updatedData) => handleDataUpdate(pf.id, updatedData)}
-                    onPrintSingle={() => handlePrintSingle(pf.id)}
-                  />
-                ))}
+                <GroupedInvoiceSelector
+                  files={processedFiles}
+                  onDataUpdate={handleDataUpdate}
+                  onDownloadAll={handleDownloadAllPdf}
+                  onDownloadSummary={handleDownloadSummaryPdf}
+                  onMergePdfs={handleMergeAllOriginalPdfs}
+                  onCombineAll={handleCombineAll}
+                  onPrintAll={handlePrintAll}
+                  onPrintSingle={handlePrintSingle}
+                  onOpenEmailModal={handleOpenEmailModal}
+                  isProcessing={anyProcessRunning}
+                />
               </div>
             )}
           </div>

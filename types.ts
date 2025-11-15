@@ -14,7 +14,7 @@ export interface InvoiceData {
   buyer: {
     name:string;
     address: string;
-    vat_id: string | null;
+    vat_id: string;
   };
   invoice: {
     invoice_number: string;

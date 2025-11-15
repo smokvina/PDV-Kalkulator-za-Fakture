@@ -27,6 +27,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({ data, originalPdfF
                 <h3 className="font-bold text-slate-600 border-b pb-1 mb-2">Kupac</h3>
                 <p><strong>Naziv:</strong> {data.buyer.name}</p>
                 <p><strong>Adresa:</strong> {data.buyer.address}</p>
+                <p><strong>PDV ID (OIB):</strong> {data.buyer.vat_id}</p>
             </div>
         </div>
         

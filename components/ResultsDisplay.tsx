@@ -161,7 +161,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
                     <InputField label="Naziv" name="buyer.name" value={formData.buyer.name} onChange={handleInputChange} />
                     <InputField label="Adresa" name="buyer.address" value={formData.buyer.address} onChange={handleInputChange} />
-                    <InputField label="PDV ID (Kupac)" name="buyer.vat_id" value={formData.buyer.vat_id || ''} onChange={handleInputChange} />
+                    <InputField label="PDV ID (OIB)" name="buyer.vat_id" value={formData.buyer.vat_id} onChange={handleInputChange} />
                 </div>
             </CollapsibleSection>
 

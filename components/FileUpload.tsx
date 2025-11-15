@@ -12,12 +12,19 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }
 
   const handleFiles = useCallback((files: FileList | null) => {
     if (files && files.length > 0) {
-      const pdfFiles = Array.from(files).filter(file => file.type === 'application/pdf');
-      if (pdfFiles.length > 0) {
-        setFileCount(pdfFiles.length);
-        onFileSelect(pdfFiles);
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/heic', 'image/heif'];
+      const acceptedFiles = Array.from(files).filter(file => 
+        allowedTypes.includes(file.type.toLowerCase())
+      );
+
+      if (acceptedFiles.length > 0) {
+        setFileCount(acceptedFiles.length);
+        onFileSelect(acceptedFiles);
+        if (acceptedFiles.length < files.length) {
+          alert("Neke datoteke su preskočene jer nisu podržanog formata (PDF, JPG, PNG, HEIC).");
+        }
       } else {
-        alert("Molimo odaberite samo PDF datoteke.");
+        alert("Molimo odaberite samo PDF, JPG, PNG ili HEIC datoteke.");
         setFileCount(0);
       }
     }
@@ -73,7 +80,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }
         type="file"
         id="file-upload"
         className="hidden"
-        accept="application/pdf"
+        accept="application/pdf,image/jpeg,image/png,image/heic,image/heif,.pdf,.jpg,.jpeg,.png,.heic,.heif"
         onChange={handleFileChange}
         disabled={disabled}
         multiple
@@ -91,7 +98,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }
             <>
                 <p className="text-lg font-semibold text-slate-700">Povucite i ispustite datoteke ovdje</p>
                 <p className="text-slate-500">ili kliknite za odabir datoteka</p>
-                <p className="text-xs text-slate-400 mt-2">Samo PDF datoteke</p>
+                <p className="text-xs text-slate-400 mt-2">Podržani formati: PDF, JPG, PNG, HEIC</p>
             </>
         )}
       </label>

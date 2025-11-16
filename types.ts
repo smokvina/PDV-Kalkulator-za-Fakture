@@ -50,7 +50,7 @@ export interface InvoiceData {
 
 export interface ProcessedFile {
   id: string;
-  file: File;
+  file: File | null;
   data: InvoiceData | null;
   status: 'queue' | 'loading' | 'success' | 'error';
   error: string | null;

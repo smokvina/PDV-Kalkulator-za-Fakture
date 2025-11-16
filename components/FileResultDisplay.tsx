@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import type { ProcessedFile, InvoiceData } from '../types';
 import { ResultsDisplay } from './ResultsDisplay';
-import { IconLoader, IconAlertTriangle, IconCheckCircle, IconChevronDown, IconFile, IconCode } from './Icons';
+import { IconLoader, IconAlertTriangle, IconCheckCircle, IconChevronDown, IconFile, IconCode, IconInfo } from './Icons';
 
 interface FileResultDisplayProps {
   processedFile: ProcessedFile;
   onDataUpdate: (updatedData: InvoiceData) => void;
   onPrintSingle: () => void;
+  onGeneratePdvFormsSingle: (file: ProcessedFile) => void;
+  isGeneratingPdvFormsSingleId: string | null;
 }
 
 // Helper function to generate suggestions based on error message
@@ -70,7 +72,7 @@ const getErrorSuggestions = (error: string | null): string[] => {
 };
 
 
-export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedFile, onDataUpdate, onPrintSingle }) => {
+export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedFile, onDataUpdate, onPrintSingle, onGeneratePdvFormsSingle, isGeneratingPdvFormsSingleId }) => {
   const [isExpanded, setIsExpanded] = useState(processedFile.status !== 'success');
   const [showDebugInfo, setShowDebugInfo] = useState(false);
   
@@ -109,6 +111,8 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
     }
   };
 
+  const fileName = processedFile.data?.meta.source_file || processedFile.file?.name || 'Nepoznata datoteka';
+
   return (
     <div className="bg-white dark:bg-card rounded-2xl shadow-lg border border-border overflow-hidden transition-all duration-300">
       <button 
@@ -119,7 +123,7 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
       >
         <div className="flex items-center space-x-3 min-w-0">
           {getStatusIcon()}
-          <span className="font-medium text-text truncate" title={processedFile.file.name}>{processedFile.file.name}</span>
+          <span className="font-medium text-text truncate" title={fileName}>{fileName}</span>
         </div>
         <div className="flex items-center space-x-3 flex-shrink-0">
           <span className="text-sm font-semibold text-text-secondary hidden sm:block">{getStatusText()}</span>
@@ -129,6 +133,17 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
 
       {isExpanded && (
         <div id={`content-${processedFile.id}`} className="bg-white dark:bg-card">
+          {processedFile.status === 'success' && !processedFile.file && (
+             <div className="p-4 sm:p-6 border-b border-border">
+                <div className="bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-yellow-500 text-yellow-700 dark:text-yellow-300 p-4 rounded-md flex items-start">
+                    <IconInfo className="h-5 w-5 text-yellow-500 mr-3 mt-0.5 flex-shrink-0" />
+                    <div>
+                        <h4 className="font-bold">Originalna datoteka nije dostupna</h4>
+                        <p className="text-sm">Podaci su vraćeni iz prethodne sesije. Za akcije koje zahtijevaju original (npr. 'Kombiniraj sve', 'Spoji originale'), potrebno je ponovno učitati datoteku.</p>
+                    </div>
+                </div>
+            </div>
+          )}
           {processedFile.status === 'success' && processedFile.data && (
             <div className="p-4 sm:p-6">
               <ResultsDisplay 
@@ -136,6 +151,8 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
                 onDataUpdate={onDataUpdate} 
                 originalPdfFile={processedFile.file} 
                 onPrint={onPrintSingle}
+                onGeneratePdvFormsSingle={() => onGeneratePdvFormsSingle(processedFile)}
+                isGeneratingPdvFormsSingle={isGeneratingPdvFormsSingleId === processedFile.id}
               />
             </div>
           )}

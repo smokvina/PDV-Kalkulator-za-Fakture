@@ -8,7 +8,7 @@ import heic2any from 'heic2any';
 import { FileUpload } from './components/FileUpload';
 import { GroupedInvoiceSelector } from './components/GroupedInvoiceSelector';
 import { ReportContent } from './components/ReportContent';
-import { SummaryReport } from './components/SummaryReport';
+import { SummaryReport, PdvStatementContent, PdvInstructionsContent, PdvFormsContent } from './components/SummaryReport';
 import { EmailModal } from './components/EmailModal';
 import { INVOICE_SYSTEM_PROMPT, INVOICE_SCHEMA } from './constants';
 import type { InvoiceData, ProcessedFile } from './types';
@@ -65,17 +65,56 @@ const App: React.FC = () => {
   const [isSendingEmail, setIsSendingEmail] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
+  const [isGeneratingPdvStatement, setIsGeneratingPdvStatement] = useState<boolean>(false);
+  const [isGeneratingPdvInstruction, setIsGeneratingPdvInstruction] = useState<boolean>(false);
+  const [isGeneratingPdvForms, setIsGeneratingPdvForms] = useState<boolean>(false);
+  const [isGeneratingPdvFormsSingle, setIsGeneratingPdvFormsSingle] = useState<string | null>(null); // File ID
+
+  // Load state from localStorage on initial render
   useEffect(() => {
-    // Check for saved theme in localStorage or system preference
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (savedTheme) {
-      setTheme(savedTheme);
-    } else if (systemPrefersDark) {
-      setTheme('dark');
+    try {
+      // 1. Theme
+      const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+      if (savedTheme) {
+        setTheme(savedTheme);
+      } else {
+        setTheme('light'); // Default to light theme
+      }
+      
+      // 2. Processed Files
+      const savedFilesJSON = localStorage.getItem('processedFiles');
+      if (savedFilesJSON) {
+        const savedFiles = JSON.parse(savedFilesJSON);
+        const restoredFiles: ProcessedFile[] = savedFiles.map((f: any) => ({
+          ...f,
+          file: null, // File object cannot be stored, must be re-uploaded for functions requiring original
+        }));
+        setProcessedFiles(restoredFiles);
+      }
+    } catch (error) {
+      console.error("Greška pri učitavanju stanja iz localStorage:", error);
+      localStorage.removeItem('processedFiles');
     }
   }, []);
+
+  // Save state to localStorage whenever processedFiles changes
+  useEffect(() => {
+    try {
+      const serializableFiles = processedFiles.map(({ file, ...rest }) => ({
+        ...rest,
+        // Store fileName from data if file object is gone, fallback to file.name
+        fileName: rest.data?.meta.source_file || file?.name,
+      }));
+      if (serializableFiles.length > 0) {
+        localStorage.setItem('processedFiles', JSON.stringify(serializableFiles));
+      } else {
+        localStorage.removeItem('processedFiles');
+      }
+    } catch (error) {
+      console.error("Greška pri spremanju stanja u localStorage:", error);
+    }
+  }, [processedFiles]);
+
 
   useEffect(() => {
     // Apply theme class to the root element
@@ -103,13 +142,18 @@ const App: React.FC = () => {
       debugInfo: null,
     }));
     setProcessedFiles(prevFiles => {
-      const existingIds = new Set(prevFiles.map(f => f.id));
-      const uniqueNewFiles = newFiles.filter(f => !existingIds.has(f.id));
+      // Prevent adding duplicates if user selects the same file again
+      const existingFileNames = new Set(prevFiles.map(f => f.file?.name));
+      const uniqueNewFiles = newFiles.filter(f => !existingFileNames.has(f.file.name));
       return [...prevFiles, ...uniqueNewFiles];
     });
   }, []);
   
   const parseSingleInvoice = useCallback(async (fileToProcess: ProcessedFile) => {
+    if (!fileToProcess.file) {
+        setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'error', error: "Originalna datoteka nije dostupna. Potrebno ju je ponovno učitati." } : f));
+        return;
+    }
     if (!process.env.API_KEY) {
       setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'error', error: "API ključ nije postavljen." } : f));
       return;
@@ -153,7 +197,9 @@ const App: React.FC = () => {
         console.error("JSON parsing error:", jsonError, "Original response:", response.text);
         throw new Error("AI model nije vratio ispravan JSON format. To se može dogoditi s kompleksnim ili nejasnim dokumentima.");
       }
-
+      
+      // Inject original filename into metadata
+      parsedJson.meta.source_file = finalFile.name;
 
       setProcessedFiles(prev => prev.map(f => f.id === fileToProcess.id ? { ...f, status: 'success', data: parsedJson as InvoiceData } : f));
 
@@ -220,126 +266,95 @@ const App: React.FC = () => {
     setProcessedFiles([]);
   };
   
+  // Generic PDF generator from a React component
+  const generatePdfFromComponent = async (
+    Component: React.ElementType, 
+    props: any, 
+    filename: string,
+    pageWidthMM: number = 210 // A4 width
+  ) => {
+      const container = document.createElement('div');
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.width = `${pageWidthMM}mm`;
+      document.body.appendChild(container);
+
+      const root = ReactDOM.createRoot(container);
+      root.render(
+          <React.StrictMode>
+              <Component {...props} />
+          </React.StrictMode>
+      );
+      
+      await new Promise(resolve => setTimeout(resolve, 500)); // Time for render
+
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+      
+      root.unmount();
+      document.body.removeChild(container);
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+          heightLeft -= pdfHeight;
+      }
+
+      pdf.save(filename);
+  };
+
   const handleDownloadAllPdf = async () => {
     const filesToGenerate = processedFiles.filter(f => f.status === 'success' && f.data);
     if (filesToGenerate.length === 0) return;
-
     setIsGeneratingCombinedPdf(true);
-
-    try {
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-
-        for (let i = 0; i < filesToGenerate.length; i++) {
-            const file = filesToGenerate[i];
-            
-            const container = document.createElement('div');
-            container.style.position = 'absolute';
-            container.style.left = '-9999px';
-            container.style.width = '210mm'; 
-            document.body.appendChild(container);
-
-            const root = ReactDOM.createRoot(container);
-            root.render(
-                <React.StrictMode>
-                    <ReportContent data={file.data!} originalPdfFile={file.file} />
-                </React.StrictMode>
-            );
-            
-            await new Promise(resolve => setTimeout(resolve, 300)); // Give some time for rendering
-
-            const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-            
-            root.unmount();
-            document.body.removeChild(container);
-            
-            const imgData = canvas.toDataURL('image/png');
-            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-            
-            if (i > 0) {
-                pdf.addPage();
-            }
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-        }
-
-        pdf.save(`svi-izvjestaji-${new Date().toISOString().split('T')[0]}.pdf`);
-
-    } catch (error) {
-        console.error("Greška pri generiranju kombiniranog PDF-a:", error);
-        alert("Došlo je do greške pri generiranju PDF-a. Molimo pokušajte ponovno.");
-    } finally {
-        setIsGeneratingCombinedPdf(false);
-    }
+    await generatePdfFromComponent(
+        ({files}: {files: ProcessedFile[]}) => <div>{files.map(f => <div key={f.id} className="printable-page"><ReportContent data={f.data!} originalPdfFile={f.file} /></div>)}</div>,
+        { files: filesToGenerate },
+        `svi-izvjestaji-${new Date().toISOString().split('T')[0]}.pdf`
+    );
+    setIsGeneratingCombinedPdf(false);
   };
 
    const handleDownloadSummaryPdf = async () => {
         const filesToGenerate = processedFiles.filter(f => f.status === 'success' && f.data);
         if (filesToGenerate.length === 0) return;
-
         setIsGeneratingSummaryPdf(true);
-
-        try {
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-
-            const container = document.createElement('div');
-            container.style.position = 'absolute';
-            container.style.left = '-9999px';
-            container.style.width = '210mm';
-            document.body.appendChild(container);
-
-            const root = ReactDOM.createRoot(container);
-            root.render(
-                <React.StrictMode>
-                    <SummaryReport files={filesToGenerate} />
-                </React.StrictMode>
-            );
-
-            await new Promise(resolve => setTimeout(resolve, 300)); // Give time for rendering
-
-            const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-
-            root.unmount();
-            document.body.removeChild(container);
-
-            const imgData = canvas.toDataURL('image/png');
-            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-            
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-            
-            pdf.save(`zbirni-izvjestaj-${new Date().toISOString().split('T')[0]}.pdf`);
-
-        } catch (error) {
-            console.error("Greška pri generiranju zbirnog PDF-a:", error);
-            alert("Došlo je do greške pri generiranju zbirnog PDF-a. Molimo pokušajte ponovno.");
-        } finally {
-            setIsGeneratingSummaryPdf(false);
-        }
+        await generatePdfFromComponent(
+            SummaryReport,
+            { files: filesToGenerate },
+            `zbirni-izvjestaj-${new Date().toISOString().split('T')[0]}.pdf`
+        );
+        setIsGeneratingSummaryPdf(false);
     };
 
   const handleMergeAllOriginalPdfs = async () => {
-    const filesToMerge = processedFiles.map(f => f.file).filter(f => f.type === 'application/pdf');
+    const filesToMerge = processedFiles.filter(f => f.file && f.file.type === 'application/pdf').map(f => f.file!);
     if (filesToMerge.length === 0) {
         alert("Nema PDF datoteka za spajanje. Ova funkcija spaja samo originalne PDF dokumente.");
         return;
     }
-
-
     setIsMergingPdfs(true);
     try {
         const mergedPdfDoc = await PDFDocument.create();
-        
         for (const file of filesToMerge) {
             const pdfBytes = await file.arrayBuffer();
             const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
             const copiedPages = await mergedPdfDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
-            copiedPages.forEach((page) => {
-                mergedPdfDoc.addPage(page);
-            });
+            copiedPages.forEach((page) => mergedPdfDoc.addPage(page));
         }
-        
         const mergedPdfBytes = await mergedPdfDoc.save();
-        
         const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -356,86 +371,139 @@ const App: React.FC = () => {
     }
   };
 
+  const handleGeneratePdvStatement = async () => {
+    const successfulFiles = processedFiles.filter(f => f.status === 'success' && f.data);
+    if (successfulFiles.length === 0) return;
+    setIsGeneratingPdvStatement(true);
+    await generatePdfFromComponent(
+        PdvStatementContent,
+        { files: successfulFiles },
+        `Izjava_PDV-${new Date().toISOString().split('T')[0]}.pdf`
+    );
+    setIsGeneratingPdvStatement(false);
+  };
+  
+  const handleGeneratePdvInstructions = async () => {
+    setIsGeneratingPdvInstruction(true);
+    await generatePdfFromComponent(
+        PdvInstructionsContent,
+        {},
+        `Uputa_PDV-PDVS_ePorezna.pdf`
+    );
+    setIsGeneratingPdvInstruction(false);
+  };
+  
+ const handleGeneratePdvForms = async () => {
+    const successfulFiles = processedFiles.filter(f => f.status === 'success' && f.data);
+    if (successfulFiles.length === 0) return;
+    setIsGeneratingPdvForms(true);
+    
+    // This component will render all forms sequentially for the final PDF
+    const AllFormsComponent = ({ files }: { files: ProcessedFile[] }) => (
+        <div>
+            {files.map(f => (
+                <div key={f.id} className="printable-page">
+                    {/* Pass each file individually to render a separate form page */}
+                    <PdvFormsContent files={[f]} />
+                </div>
+            ))}
+        </div>
+    );
+
+    await generatePdfFromComponent(
+        AllFormsComponent,
+        { files: successfulFiles },
+        `Svi_PDV_i_PDVS_Obrasci-${new Date().toISOString().split('T')[0]}.pdf`
+    );
+    setIsGeneratingPdvForms(false);
+  };
+
+  const handleGeneratePdvFormsSingle = async (file: ProcessedFile) => {
+    if (!file.data) return;
+    setIsGeneratingPdvFormsSingle(file.id);
+    await generatePdfFromComponent(
+        PdvFormsContent,
+        { files: [file] }, // Pass only the single file to generate its form
+        `PDV_Obrazac_${file.data.invoice.invoice_number.replace(/[\/\s]/g, '_')}.pdf`
+    );
+    setIsGeneratingPdvFormsSingle(null);
+  };
+
     const handleCombineAll = async () => {
-        const filesToCombine = processedFiles.filter(f => f.status === 'success' && f.data);
-        if (filesToCombine.length === 0) return;
+        const filesToCombine = processedFiles.filter(f => f.status === 'success' && f.data && f.file);
+        if (filesToCombine.length === 0) {
+            alert("Nema dostupnih originalnih datoteka za kombiniranje. Ako ste osvježili stranicu, molimo ponovno učitajte datoteke.");
+            return;
+        }
 
         setIsCombiningAll(true);
         try {
             const combinedDoc = await PDFDocument.create();
 
-            for (const processedFile of filesToCombine) {
-                // 1. Add Original File Page(s)
-                const { file: originalFile, mimeType } = await prepareFileForApi(processedFile.file);
-
-                if (mimeType === 'application/pdf') {
-                    const pdfBytes = await originalFile.arrayBuffer();
-                    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-                    const copiedPages = await combinedDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
-                    copiedPages.forEach(page => combinedDoc.addPage(page));
-                } else if (mimeType === 'image/jpeg' || mimeType === 'image/png') {
-                    const imgBytes = await originalFile.arrayBuffer();
-                    const image = mimeType === 'image/jpeg' 
-                        ? await combinedDoc.embedJpg(imgBytes)
-                        : await combinedDoc.embedPng(imgBytes);
-                    
-                    const page = combinedDoc.addPage();
-                    const { width, height } = page.getSize();
-                    const { width: imgWidth, height: imgHeight } = image;
-                    
-                    const widthScale = (width - 50) / imgWidth;
-                    const heightScale = (height - 50) / imgHeight;
-                    const scale = Math.min(widthScale, heightScale, 1);
-                    const scaledDims = { width: imgWidth * scale, height: imgHeight * scale };
-
-                    page.drawImage(image, {
-                        x: (width - scaledDims.width) / 2,
-                        y: (height - scaledDims.height) / 2,
-                        width: scaledDims.width,
-                        height: scaledDims.height,
-                    });
-                }
-
-                // 2. Add Report Page
+            // Helper to render component and add as PDF page
+            const addComponentAsPage = async (Component: React.ElementType, props: any) => {
                 const container = document.createElement('div');
                 container.style.position = 'absolute';
                 container.style.left = '-9999px';
                 container.style.width = '210mm';
                 document.body.appendChild(container);
-
                 const root = ReactDOM.createRoot(container);
-                root.render(
-                    <React.StrictMode>
-                        <ReportContent data={processedFile.data!} originalPdfFile={processedFile.file} />
-                    </React.StrictMode>
-                );
-                
-                await new Promise(resolve => setTimeout(resolve, 300));
-
+                root.render(<React.StrictMode><Component {...props} /></React.StrictMode>);
+                await new Promise(res => setTimeout(res, 300));
                 const canvas = await html2canvas(container, { scale: 2, useCORS: true });
-                
-                root.unmount();
-                document.body.removeChild(container);
-
+                root.unmount(); document.body.removeChild(container);
                 const pngBytes = await fetch(canvas.toDataURL('image/png')).then(res => res.arrayBuffer());
-                const reportImage = await combinedDoc.embedPng(pngBytes);
+                const image = await combinedDoc.embedPng(pngBytes);
+                const page = combinedDoc.addPage();
+                const { width, height } = page.getSize();
+                const { width: imgWidth, height: imgHeight } = image.scale(1);
+                const scale = Math.min(width / imgWidth, height / imgHeight);
+                page.drawImage(image, { x: (width - imgWidth * scale) / 2, y: (height - imgHeight * scale) / 2, width: imgWidth * scale, height: imgHeight * scale });
+            };
 
-                const reportPage = combinedDoc.addPage();
-                const { width: pageWidth, height: pageHeight } = reportPage.getSize();
-                const { width: reportImgWidth, height: reportImgHeight } = reportImage;
+            // Component to render all individual forms for inclusion
+            const AllFormsComponent = ({ files }: { files: ProcessedFile[] }) => (
+                <div>
+                    {files.map(f => (
+                        <div key={f.id} className="printable-page"><PdvFormsContent files={[f]} /></div>
+                    ))}
+                </div>
+            );
 
-                const reportScale = Math.min(pageWidth / reportImgWidth, pageHeight / reportImgHeight);
-                const reportScaled = { width: reportImgWidth * reportScale, height: reportImgHeight * reportScale };
-
-                reportPage.drawImage(reportImage, {
-                    x: (pageWidth - reportScaled.width) / 2,
-                    y: (pageHeight - reportScaled.height) / 2,
-                    width: reportScaled.width,
-                    height: reportScaled.height,
-                });
+            // 1. Add all major generated reports first
+            await addComponentAsPage(SummaryReport, { files: filesToCombine });
+            await addComponentAsPage(PdvStatementContent, { files: filesToCombine });
+            await addComponentAsPage(PdvInstructionsContent, {});
+            await addComponentAsPage(AllFormsComponent, { files: filesToCombine });
+            
+            // 2. Loop through each file and add its specific documents:
+            //    - Original File
+            //    - Individual Report
+            //    - Individual PDV/PDV-S Form
+            for (const processedFile of filesToCombine) {
+                if (!processedFile.file) continue;
+                const { file: originalFile, mimeType } = await prepareFileForApi(processedFile.file);
+                if (mimeType === 'application/pdf') {
+                    const pdfBytes = await originalFile.arrayBuffer();
+                    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+                    const copiedPages = await combinedDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
+                    copiedPages.forEach(page => combinedDoc.addPage(page));
+                } else if (mimeType.startsWith('image/')) {
+                    const imgBytes = await originalFile.arrayBuffer();
+                    const image = mimeType === 'image/jpeg' ? await combinedDoc.embedJpg(imgBytes) : await combinedDoc.embedPng(imgBytes);
+                    const page = combinedDoc.addPage();
+                    const { width, height } = page.getSize();
+                    const dims = image.scale(1);
+                    const scale = Math.min((width - 50) / dims.width, (height - 50) / dims.height, 1);
+                    page.drawImage(image, { x: (width - dims.width * scale) / 2, y: (height - dims.height * scale) / 2, width: dims.width * scale, height: dims.height * scale });
+                }
+                // Add individual report
+                await addComponentAsPage(ReportContent, { data: processedFile.data!, originalPdfFile: processedFile.file });
+                
+                // Add individual PDV/PDV-S form
+                await addComponentAsPage(PdvFormsContent, { files: [processedFile] });
             }
 
-            // 3. Save and Download
             const combinedPdfBytes = await combinedDoc.save();
             const blob = new Blob([combinedPdfBytes], { type: 'application/pdf' });
             const link = document.createElement('a');
@@ -501,7 +569,7 @@ const App: React.FC = () => {
       }
   };
 
-  const anyProcessRunning = isProcessing || isGeneratingCombinedPdf || isGeneratingSummaryPdf || isMergingPdfs || isCombiningAll;
+  const anyProcessRunning = isProcessing || isGeneratingCombinedPdf || isGeneratingSummaryPdf || isMergingPdfs || isCombiningAll || isGeneratingPdvStatement || isGeneratingPdvInstruction || isGeneratingPdvForms || !!isGeneratingPdvFormsSingle;
 
   return (
     <>
@@ -583,6 +651,11 @@ const App: React.FC = () => {
                   onPrintAll={handlePrintAll}
                   onPrintSingle={handlePrintSingle}
                   onOpenEmailModal={handleOpenEmailModal}
+                  onGeneratePdvStatement={handleGeneratePdvStatement}
+                  onGeneratePdvInstructions={handleGeneratePdvInstructions}
+                  onGeneratePdvForms={handleGeneratePdvForms}
+                  onGeneratePdvFormsSingle={handleGeneratePdvFormsSingle}
+                  isGeneratingPdvFormsSingle={isGeneratingPdvFormsSingle}
                   isProcessing={anyProcessRunning}
                 />
               </div>

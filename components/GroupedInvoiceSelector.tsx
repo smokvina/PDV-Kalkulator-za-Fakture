@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { ProcessedFile, InvoiceData } from '../types';
 import { FileResultDisplay } from './FileResultDisplay';
-import { IconDownload, IconPrinter, IconBook, IconClipboard, IconMail, IconLayers, IconBarcode, PaymentSlip } from './Icons';
+import { IconDownload, IconPrinter, IconBook, IconClipboard, IconMail, IconLayers, IconBarcode, PaymentSlip, IconInfo } from './Icons';
 
 interface ResultsListProps {
     files: ProcessedFile[];
@@ -16,6 +16,11 @@ interface ResultsListProps {
     onPrintAll: () => void;
     onPrintSingle: (fileId: string) => void;
     onOpenEmailModal: () => void;
+    onGeneratePdvStatement: () => Promise<void>;
+    onGeneratePdvInstructions: () => Promise<void>;
+    onGeneratePdvForms: () => Promise<void>;
+    onGeneratePdvFormsSingle: (file: ProcessedFile) => Promise<void>;
+    isGeneratingPdvFormsSingle: string | null;
     isProcessing: boolean;
 }
 
@@ -29,16 +34,26 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
     onPrintAll,
     onPrintSingle,
     onOpenEmailModal,
+    onGeneratePdvStatement,
+    onGeneratePdvInstructions,
+    onGeneratePdvForms,
+    onGeneratePdvFormsSingle,
+    isGeneratingPdvFormsSingle,
     isProcessing,
 }) => {
     const [isGeneratingSummaryPaymentPdf, setIsGeneratingSummaryPaymentPdf] = useState(false);
     
     const successfulFiles = files.filter(f => f.status === 'success' && f.data);
     const hasSuccessfulFiles = successfulFiles.length > 0;
-    const hasAnyFiles = files.length > 0;
+    const hasOriginalFiles = files.some(f => f.file !== null);
+    const hasPdfOriginals = files.some(f => f.file && f.file.type === 'application/pdf');
+    const hasSuccessfulOriginals = successfulFiles.some(f => f.file !== null);
 
     const disabledForSuccessful = isProcessing || !hasSuccessfulFiles;
-    const disabledForAny = isProcessing || !hasAnyFiles;
+    const disabledForOriginals = isProcessing || !hasOriginalFiles;
+    const disabledForPdfOriginals = isProcessing || !hasPdfOriginals;
+    const disabledForSuccessfulOriginals = isProcessing || !hasSuccessfulOriginals;
+
 
     const handleGenerateSummaryPaymentPdf = async () => {
         if (!hasSuccessfulFiles) return;
@@ -110,6 +125,36 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
             {/* Global Actions */}
             <div className="flex justify-end items-center flex-wrap gap-2 p-4 bg-slate-50 dark:bg-card dark:border-border rounded-xl border border-border mb-6">
                  <button
+                    onClick={onGeneratePdvStatement}
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={disabledForSuccessful}
+                    title="Generiraj izjavu o obračunu PDV-a"
+                >
+                    <IconInfo className="w-4 h-4 mr-2" />
+                    <span>Izjava PDV</span>
+                </button>
+                 <button
+                    onClick={onGeneratePdvInstructions}
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isProcessing}
+                    title="Generiraj upute za popunjavanje PDV i PDV-S obrazaca"
+                >
+                    <IconBook className="w-4 h-4 mr-2" />
+                    <span>Uputa PDV</span>
+                </button>
+                 <button
+                    onClick={onGeneratePdvForms}
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={disabledForSuccessful}
+                    title="Spoji sve pojedinačne PDV/PDV-S obrasce u jedan dokument"
+                >
+                    <IconClipboard className="w-4 h-4 mr-2" />
+                    <span>Spoji Obrasce</span>
+                </button>
+
+                 <div className="h-6 border-l border-border mx-2"></div>
+
+                 <button
                     onClick={handleGenerateSummaryPaymentPdf}
                     className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={disabledForSuccessful || isGeneratingSummaryPaymentPdf}
@@ -125,12 +170,12 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                     title="Preuzmi zbirni izvještaj kao PDF"
                 >
                     <IconBook className="w-4 h-4 mr-2" />
-                    <span>Preuzmi sažetak</span>
+                    <span>Sažetak</span>
                 </button>
                 <button
                     onClick={onMergePdfs}
                     className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={disabledForAny}
+                    disabled={disabledForPdfOriginals}
                     title="Spoji sve učitane originalne PDF-ove u jedan dokument"
                 >
                     <IconClipboard className="w-4 h-4 mr-2" />
@@ -143,7 +188,7 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                     title="Pošalji izvještaje emailom"
                 >
                     <IconMail className="w-4 h-4 mr-2" />
-                    <span>Pošalji emailom</span>
+                    <span>Email</span>
                 </button>
                 <button
                     onClick={onPrintAll}
@@ -166,8 +211,8 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                  <button
                     onClick={onCombineAll}
                     className="flex items-center text-sm font-semibold bg-primary text-white px-4 py-2 rounded-lg shadow-sm hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={disabledForSuccessful}
-                    title="Spoji sve originalne datoteke i generirane izvještaje u jedan PDF"
+                    disabled={disabledForSuccessfulOriginals}
+                    title="Spoji sve originalne datoteke i sve generirane izvještaje u jedan PDF"
                 >
                     <IconLayers className="w-4 h-4 mr-2" />
                     <span>Kombiniraj sve</span>
@@ -183,6 +228,8 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                             processedFile={file}
                             onDataUpdate={(updatedData) => onDataUpdate(file.id, updatedData)}
                             onPrintSingle={() => onPrintSingle(file.id)}
+                            onGeneratePdvFormsSingle={onGeneratePdvFormsSingle}
+                            isGeneratingPdvFormsSingleId={isGeneratingPdvFormsSingle}
                         />
                     ))
                 ) : (

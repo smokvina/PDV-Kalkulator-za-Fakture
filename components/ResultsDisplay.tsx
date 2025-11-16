@@ -5,13 +5,15 @@ import ReactDOM from 'react-dom/client';
 import type { InvoiceData } from '../types';
 import { ReportContent } from './ReportContent';
 import { CollapsibleSection } from './CollapsibleSection';
-import { IconPencil, IconDownload, IconPrinter, IconInfo, IconBarcode, PaymentSlip, IconAlertTriangle } from './Icons';
+import { IconPencil, IconDownload, IconPrinter, IconInfo, IconBarcode, PaymentSlip, IconAlertTriangle, IconClipboard } from './Icons';
 
 interface ResultsDisplayProps {
   initialData: InvoiceData;
   onDataUpdate: (updatedData: InvoiceData) => void;
   originalPdfFile: File | null;
   onPrint: () => void;
+  isGeneratingPdvFormsSingle: boolean;
+  onGeneratePdvFormsSingle: () => void;
 }
 
 // Define a version of InvoiceData where line item amounts can be strings for editing
@@ -41,7 +43,7 @@ const createSafeFilename = (prefix: string, supplier: string, invoiceNumber: str
 };
 
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onDataUpdate, originalPdfFile, onPrint }) => {
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onDataUpdate, originalPdfFile, onPrint, isGeneratingPdvFormsSingle, onGeneratePdvFormsSingle }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<FormInvoiceData>(initialData);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -371,6 +373,15 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                 >
                     <IconPencil className="w-4 h-4 mr-1.5" />
                     <span>Uredi</span>
+                </button>
+                <button
+                    onClick={onGeneratePdvFormsSingle}
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:border-border dark:hover:bg-slate-600"
+                    title="Generiraj PDV/PDV-S Obrazac"
+                    disabled={isGeneratingPdvFormsSingle}
+                >
+                    <IconClipboard className="w-4 h-4 mr-1.5" />
+                    <span>{isGeneratingPdvFormsSingle ? 'Generiram...' : 'PDV Obrazac'}</span>
                 </button>
                 <button 
                     onClick={handleGeneratePaymentPdf} 

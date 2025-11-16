@@ -10,7 +10,7 @@ import { GroupedInvoiceSelector } from './components/GroupedInvoiceSelector';
 import { ReportContent } from './components/ReportContent';
 import { SummaryReport, PdvStatementContent, PdvInstructionsContent, PdvFormsContent } from './components/SummaryReport';
 import { EmailModal } from './components/EmailModal';
-import { INVOICE_SYSTEM_PROMPT, INVOICE_SCHEMA } from './constants';
+import { INVOICE_SYSTEM_PROMPT, INVOICE_SCHEMA, PDV_XML_TEMPLATE, PDVS_XML_TEMPLATE } from './constants';
 import type { InvoiceData, ProcessedFile } from './types';
 import { IconBook, IconSun, IconMoon } from './components/Icons';
 
@@ -69,6 +69,8 @@ const App: React.FC = () => {
   const [isGeneratingPdvInstruction, setIsGeneratingPdvInstruction] = useState<boolean>(false);
   const [isGeneratingPdvForms, setIsGeneratingPdvForms] = useState<boolean>(false);
   const [isGeneratingPdvFormsSingle, setIsGeneratingPdvFormsSingle] = useState<string | null>(null); // File ID
+  const [isGeneratingXml, setIsGeneratingXml] = useState<string | null>(null); // Can be 'single' or 'bulk'
+
 
   // Load state from localStorage on initial render
   useEffect(() => {
@@ -293,7 +295,7 @@ const App: React.FC = () => {
       root.unmount();
       document.body.removeChild(container);
       
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/jpeg', 0.95); // OPTIMIZATION: Use JPEG with high quality
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -302,13 +304,14 @@ const App: React.FC = () => {
       let heightLeft = imgHeight;
       let position = 0;
 
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      // OPTIMIZATION: Specify JPEG format and FAST compression
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
       heightLeft -= pdfHeight;
 
       while (heightLeft > 0) {
           position = heightLeft - imgHeight;
           pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+          pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
           heightLeft -= pdfHeight;
       }
 
@@ -429,6 +432,122 @@ const App: React.FC = () => {
     setIsGeneratingPdvFormsSingle(null);
   };
 
+  const generateAndDownloadXml = (xmlString: string, filename: string) => {
+    const blob = new Blob([xmlString], { type: 'application/xml;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+  
+  const generateXmlsForPeriod = (filesForPeriod: ProcessedFile[]): { pdvXml: string; pdvsXml: string } | null => {
+      if (!filesForPeriod || filesForPeriod.length === 0) return null;
+  
+      const firstData = filesForPeriod[0].data!;
+      const buyer = firstData.buyer;
+      const periodDate = new Date(firstData.invoice.invoice_date);
+      const year = periodDate.getFullYear();
+      const month = periodDate.getMonth();
+      const datumOd = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const datumDo = new Date(year, month + 1, 0).toISOString().split('T')[0];
+  
+      const totalBase = filesForPeriod.reduce((sum, f) => sum + f.data!.calculations.commission_base, 0);
+      const totalVat = filesForPeriod.reduce((sum, f) => sum + f.data!.calculations.vat_amount, 0);
+  
+      const nameParts = buyer.name.split(' ');
+      const ime = nameParts[0] || '';
+      const prezime = nameParts.slice(1).join(' ') || '';
+  
+      const parser = new DOMParser();
+      const serializer = new XMLSerializer();
+  
+      // --- PDV Obrazac ---
+      const pdvDoc = parser.parseFromString(PDV_XML_TEMPLATE, "application/xml");
+      pdvDoc.querySelector("Metapodaci Autor")!.textContent = buyer.name;
+      pdvDoc.querySelector("Metapodaci Datum")!.textContent = new Date().toISOString();
+      pdvDoc.querySelector("Metapodaci Identifikator")!.textContent = crypto.randomUUID();
+      pdvDoc.querySelector("Zaglavlje DatumOd")!.textContent = datumOd;
+      pdvDoc.querySelector("Zaglavlje DatumDo")!.textContent = datumDo;
+      pdvDoc.querySelector("Zaglavlje Obveznik Ime")!.textContent = ime;
+      pdvDoc.querySelector("Zaglavlje Obveznik Prezime")!.textContent = prezime;
+      pdvDoc.querySelector("Zaglavlje Obveznik OIB")!.textContent = buyer.vat_id.replace('HR', '');
+      pdvDoc.querySelector("Zaglavlje Obveznik Mjesto")!.textContent = buyer.address.split(',')[1]?.trim() || buyer.address;
+      pdvDoc.querySelector("Zaglavlje Obveznik Ulica")!.textContent = buyer.address.split(',')[0]?.trim() || '';
+      
+      pdvDoc.querySelector("Tijelo Podatak111")!.textContent = totalBase.toFixed(2);
+      pdvDoc.querySelector("Tijelo Podatak311 Vrijednost")!.textContent = totalBase.toFixed(2);
+      pdvDoc.querySelector("Tijelo Podatak311 Porez")!.textContent = totalVat.toFixed(2);
+      pdvDoc.querySelector("Tijelo Podatak400")!.textContent = totalVat.toFixed(2);
+      pdvDoc.querySelector("Tijelo Podatak500")!.textContent = totalVat.toFixed(2);
+      pdvDoc.querySelector("Tijelo Podatak610")!.textContent = "0.00";
+      const pdvXml = serializer.serializeToString(pdvDoc);
+  
+      // --- PDV-S Obrazac ---
+      const pdvsDoc = parser.parseFromString(PDVS_XML_TEMPLATE, "application/xml");
+      pdvsDoc.querySelector("Metapodaci Autor")!.textContent = buyer.name;
+      pdvsDoc.querySelector("Metapodaci Datum")!.textContent = new Date().toISOString();
+      pdvsDoc.querySelector("Metapodaci Identifikator")!.textContent = crypto.randomUUID();
+      pdvsDoc.querySelector("Zaglavlje DatumOd")!.textContent = datumOd;
+      pdvsDoc.querySelector("Zaglavlje DatumDo")!.textContent = datumDo;
+      pdvsDoc.querySelector("Zaglavlje Obveznik Ime")!.textContent = ime;
+      pdvsDoc.querySelector("Zaglavlje Obveznik Prezime")!.textContent = prezime;
+      pdvsDoc.querySelector("Zaglavlje Obveznik OIB")!.textContent = buyer.vat_id.replace('HR', '');
+      pdvsDoc.querySelector("Zaglavlje Obveznik Mjesto")!.textContent = buyer.address.split(',')[1]?.trim() || buyer.address;
+      pdvsDoc.querySelector("Zaglavlje Obveznik Ulica")!.textContent = buyer.address.split(',')[0]?.trim() || '';
+
+      const isporukeNode = pdvsDoc.querySelector("Tijelo Isporuke")!;
+      const supplier = firstData.supplier;
+      const isporukaEl = pdvsDoc.createElement('Isporuka');
+      isporukaEl.innerHTML = `<Rbr>1</Rbr><VrstaStjecanja>a</VrstaStjecanja><NazivDobavljaca>${supplier.name}</NazivDobavljaca><AdresaDobavljaca>${supplier.address}</AdresaDobavljaca><PDVIDbrojDobavljaca>${supplier.vat_id}</PDVIDbrojDobavljaca><IznosRacuna>${totalBase.toFixed(2)}</IznosRacuna>`;
+      isporukeNode.appendChild(isporukaEl);
+      pdvsDoc.querySelector("Tijelo IsporukeUkupno I1")!.textContent = totalBase.toFixed(2);
+      const pdvsXml = serializer.serializeToString(pdvsDoc);
+  
+      return { pdvXml, pdvsXml };
+  };
+
+  const handleGenerateXmlSingle = async (fileId: string) => {
+    const file = processedFiles.find(f => f.id === fileId);
+    if (!file || !file.data) return;
+    setIsGeneratingXml(file.id);
+    await new Promise(res => setTimeout(res, 200)); // Short delay for UI update
+    const result = generateXmlsForPeriod([file]);
+    if (result) {
+        const period = file.data.invoice.invoice_date.substring(0, 7);
+        generateAndDownloadXml(result.pdvXml, `PDV_${period}_${file.data.invoice.invoice_number.replace(/[\s\/]/g, '_')}.xml`);
+        generateAndDownloadXml(result.pdvsXml, `PDVS_${period}_${file.data.invoice.invoice_number.replace(/[\s\/]/g, '_')}.xml`);
+    }
+    setIsGeneratingXml(null);
+  };
+  
+  const handleGenerateXmlsBulk = async () => {
+    const successfulFiles = processedFiles.filter(f => f.status === 'success' && f.data);
+    if (successfulFiles.length === 0) return;
+    setIsGeneratingXml('bulk');
+    await new Promise(res => setTimeout(res, 200));
+    
+    const filesByPeriod: Record<string, ProcessedFile[]> = successfulFiles.reduce((acc, file) => {
+        const period = file.data!.invoice.invoice_date.substring(0, 7); // YYYY-MM
+        if (!acc[period]) acc[period] = [];
+        acc[period].push(file);
+        return acc;
+    }, {});
+
+    Object.entries(filesByPeriod).forEach(([period, files]) => {
+        const result = generateXmlsForPeriod(files);
+        if (result) {
+            generateAndDownloadXml(result.pdvXml, `ObrazacPDV_${period}.xml`);
+            generateAndDownloadXml(result.pdvsXml, `ObrazacPDVS_${period}.xml`);
+        }
+    });
+
+    setIsGeneratingXml(null);
+  };
+
+
     const handleCombineAll = async () => {
         const filesToCombine = processedFiles.filter(f => f.status === 'success' && f.data && f.file);
         if (filesToCombine.length === 0) {
@@ -452,8 +571,11 @@ const App: React.FC = () => {
                 await new Promise(res => setTimeout(res, 300));
                 const canvas = await html2canvas(container, { scale: 2, useCORS: true });
                 root.unmount(); document.body.removeChild(container);
-                const pngBytes = await fetch(canvas.toDataURL('image/png')).then(res => res.arrayBuffer());
-                const image = await combinedDoc.embedPng(pngBytes);
+                
+                // OPTIMIZATION: Use JPEG instead of PNG
+                const jpegBytes = await fetch(canvas.toDataURL('image/jpeg', 0.95)).then(res => res.arrayBuffer());
+                const image = await combinedDoc.embedJpg(jpegBytes);
+
                 const page = combinedDoc.addPage();
                 const { width, height } = page.getSize();
                 const { width: imgWidth, height: imgHeight } = image.scale(1);
@@ -569,7 +691,7 @@ const App: React.FC = () => {
       }
   };
 
-  const anyProcessRunning = isProcessing || isGeneratingCombinedPdf || isGeneratingSummaryPdf || isMergingPdfs || isCombiningAll || isGeneratingPdvStatement || isGeneratingPdvInstruction || isGeneratingPdvForms || !!isGeneratingPdvFormsSingle;
+  const anyProcessRunning = isProcessing || isGeneratingCombinedPdf || isGeneratingSummaryPdf || isMergingPdfs || isCombiningAll || isGeneratingPdvStatement || isGeneratingPdvInstruction || isGeneratingPdvForms || !!isGeneratingPdvFormsSingle || !!isGeneratingXml;
 
   return (
     <>
@@ -656,6 +778,9 @@ const App: React.FC = () => {
                   onGeneratePdvForms={handleGeneratePdvForms}
                   onGeneratePdvFormsSingle={handleGeneratePdvFormsSingle}
                   isGeneratingPdvFormsSingle={isGeneratingPdvFormsSingle}
+                  onGenerateXmlsBulk={handleGenerateXmlsBulk}
+                  onGenerateXmlSingle={handleGenerateXmlSingle}
+                  isGeneratingXml={isGeneratingXml}
                   isProcessing={anyProcessRunning}
                 />
               </div>

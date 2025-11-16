@@ -9,6 +9,8 @@ interface FileResultDisplayProps {
   onPrintSingle: () => void;
   onGeneratePdvFormsSingle: (file: ProcessedFile) => void;
   isGeneratingPdvFormsSingleId: string | null;
+  onGenerateXmlSingle: (fileId: string) => void;
+  isGeneratingXmlId: string | null;
 }
 
 // Helper function to generate suggestions based on error message
@@ -72,7 +74,15 @@ const getErrorSuggestions = (error: string | null): string[] => {
 };
 
 
-export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedFile, onDataUpdate, onPrintSingle, onGeneratePdvFormsSingle, isGeneratingPdvFormsSingleId }) => {
+export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ 
+    processedFile, 
+    onDataUpdate, 
+    onPrintSingle, 
+    onGeneratePdvFormsSingle, 
+    isGeneratingPdvFormsSingleId,
+    onGenerateXmlSingle,
+    isGeneratingXmlId
+}) => {
   const [isExpanded, setIsExpanded] = useState(processedFile.status !== 'success');
   const [showDebugInfo, setShowDebugInfo] = useState(false);
   
@@ -153,6 +163,8 @@ export const FileResultDisplay: React.FC<FileResultDisplayProps> = ({ processedF
                 onPrint={onPrintSingle}
                 onGeneratePdvFormsSingle={() => onGeneratePdvFormsSingle(processedFile)}
                 isGeneratingPdvFormsSingle={isGeneratingPdvFormsSingleId === processedFile.id}
+                onGenerateXmlSingle={() => onGenerateXmlSingle(processedFile.id)}
+                isGeneratingXml={isGeneratingXmlId === processedFile.id}
               />
             </div>
           )}

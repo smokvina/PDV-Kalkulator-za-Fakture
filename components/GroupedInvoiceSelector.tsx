@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { ProcessedFile, InvoiceData } from '../types';
 import { FileResultDisplay } from './FileResultDisplay';
-import { IconDownload, IconPrinter, IconBook, IconClipboard, IconMail, IconLayers, IconBarcode, PaymentSlip, IconInfo } from './Icons';
+import { IconDownload, IconPrinter, IconBook, IconClipboard, IconMail, IconLayers, IconBarcode, PaymentSlip, IconInfo, IconCode } from './Icons';
 
 interface ResultsListProps {
     files: ProcessedFile[];
@@ -21,6 +21,9 @@ interface ResultsListProps {
     onGeneratePdvForms: () => Promise<void>;
     onGeneratePdvFormsSingle: (file: ProcessedFile) => Promise<void>;
     isGeneratingPdvFormsSingle: string | null;
+    onGenerateXmlsBulk: () => Promise<void>;
+    onGenerateXmlSingle: (fileId: string) => Promise<void>;
+    isGeneratingXml: string | null;
     isProcessing: boolean;
 }
 
@@ -39,6 +42,9 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
     onGeneratePdvForms,
     onGeneratePdvFormsSingle,
     isGeneratingPdvFormsSingle,
+    onGenerateXmlsBulk,
+    onGenerateXmlSingle,
+    isGeneratingXml,
     isProcessing,
 }) => {
     const [isGeneratingSummaryPaymentPdf, setIsGeneratingSummaryPaymentPdf] = useState(false);
@@ -124,6 +130,18 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
         <div className="mt-6">
             {/* Global Actions */}
             <div className="flex justify-end items-center flex-wrap gap-2 p-4 bg-slate-50 dark:bg-card dark:border-border rounded-xl border border-border mb-6">
+                 <button
+                    onClick={onGenerateXmlsBulk}
+                    className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={disabledForSuccessful || isGeneratingXml === 'bulk'}
+                    title="Preuzmi sve XML obrasce (PDV, PDV-S) grupirane po mjesecima"
+                >
+                    <IconCode className="w-4 h-4 mr-2" />
+                    <span>{isGeneratingXml === 'bulk' ? 'Generiram...' : 'Preuzmi sve XML'}</span>
+                </button>
+
+                 <div className="h-6 border-l border-border mx-2"></div>
+                 
                  <button
                     onClick={onGeneratePdvStatement}
                     className="flex items-center text-sm font-semibold bg-white dark:bg-slate-700 dark:border-border dark:text-slate-200 dark:hover:bg-slate-600 border border-slate-300 text-slate-700 px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -230,6 +248,8 @@ export const GroupedInvoiceSelector: React.FC<ResultsListProps> = ({
                             onPrintSingle={() => onPrintSingle(file.id)}
                             onGeneratePdvFormsSingle={onGeneratePdvFormsSingle}
                             isGeneratingPdvFormsSingleId={isGeneratingPdvFormsSingle}
+                            onGenerateXmlSingle={onGenerateXmlSingle}
+                            isGeneratingXmlId={isGeneratingXml}
                         />
                     ))
                 ) : (

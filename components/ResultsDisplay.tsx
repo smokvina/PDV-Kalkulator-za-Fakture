@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom/client';
 import type { InvoiceData } from '../types';
 import { ReportContent } from './ReportContent';
 import { CollapsibleSection } from './CollapsibleSection';
-import { IconPencil, IconDownload, IconPrinter, IconInfo, IconBarcode, PaymentSlip, IconAlertTriangle, IconClipboard } from './Icons';
+import { IconPencil, IconDownload, IconPrinter, IconInfo, IconBarcode, PaymentSlip, IconAlertTriangle, IconClipboard, IconCode } from './Icons';
 
 interface ResultsDisplayProps {
   initialData: InvoiceData;
@@ -14,6 +14,8 @@ interface ResultsDisplayProps {
   onPrint: () => void;
   isGeneratingPdvFormsSingle: boolean;
   onGeneratePdvFormsSingle: () => void;
+  isGeneratingXml: boolean;
+  onGenerateXmlSingle: () => void;
 }
 
 // Define a version of InvoiceData where line item amounts can be strings for editing
@@ -43,7 +45,16 @@ const createSafeFilename = (prefix: string, supplier: string, invoiceNumber: str
 };
 
 
-export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onDataUpdate, originalPdfFile, onPrint, isGeneratingPdvFormsSingle, onGeneratePdvFormsSingle }) => {
+export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ 
+    initialData, 
+    onDataUpdate, 
+    originalPdfFile, 
+    onPrint, 
+    isGeneratingPdvFormsSingle, 
+    onGeneratePdvFormsSingle,
+    isGeneratingXml,
+    onGenerateXmlSingle 
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<FormInvoiceData>(initialData);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -168,13 +179,13 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
     setIsGeneratingPdf(true);
     try {
         const canvas = await html2canvas(reportContentRef.current, { scale: 2, useCORS: true });
-        const imgData = canvas.toDataURL('image/png');
+        const imgData = canvas.toDataURL('image/jpeg', 0.95); // OPTIMIZATION
         
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight, undefined, 'FAST'); // OPTIMIZATION
         
         const filename = createSafeFilename(
             'Izvjestaj',
@@ -233,7 +244,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
         root.unmount();
         document.body.removeChild(container);
         
-        const imgData = canvas.toDataURL('image/png');
+        const imgData = canvas.toDataURL('image/jpeg', 0.95); // OPTIMIZATION
         const pdf = new jsPDF({
             orientation: 'l',
             unit: 'mm',
@@ -243,7 +254,7 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight, undefined, 'FAST'); // OPTIMIZATION
 
         const filename = createSafeFilename(
             'Uplatnica',
@@ -373,6 +384,15 @@ export const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ initialData, onD
                 >
                     <IconPencil className="w-4 h-4 mr-1.5" />
                     <span>Uredi</span>
+                </button>
+                 <button
+                    onClick={onGenerateXmlSingle}
+                    className="flex items-center text-sm font-semibold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg shadow-sm hover:bg-slate-50 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:border-border dark:hover:bg-slate-600"
+                    title="Preuzmi XML obrasce (PDV, PDV-S)"
+                    disabled={isGeneratingXml}
+                >
+                    <IconCode className="w-4 h-4 mr-1.5" />
+                    <span>{isGeneratingXml ? 'Generiram...' : 'XML'}</span>
                 </button>
                 <button
                     onClick={onGeneratePdvFormsSingle}
